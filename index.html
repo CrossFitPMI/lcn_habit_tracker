@@ -326,7 +326,7 @@
 </div>
 
 <script>
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyRPDI6gIFL74ex5hCyReWGGzvg7Utg9MsKkvFQTt5wu7PW_8AQ2S3HTY-W6bNstSpP/exec';
+const SCRIPT_URL = '';
 
 let currentUser = '';
 let habits = {protein:false,alcohol:false,exercise:false};
@@ -398,7 +398,7 @@ function calcLogScore(log) {
   s += scoreFV(log['Fruit & Veg Portions']);
   if(log['Protein Target Hit']==='Yes') s += 15;
   if(log['No Alcohol']==='Yes')         s += 15;
-  if(log['Exercise Completed']==='Yes') s += 10;
+  if(log['Exercise Completed']==='Yes' || log['exercise']==='true' || log['exercise']===true || log['exercise']==='Yes') s += 10;
   return Math.min(s, 100);
 }
 
@@ -435,6 +435,7 @@ function showApp() {
 
 // ── TABS ──
 function switchTab(tab,btn) {
+  if(tab==='coach' && !coachUnlocked) { showPinModal(); return; }
   ['log','history','coach'].forEach(t=>document.getElementById('tab-'+t).style.display='none');
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
   document.getElementById('tab-'+tab).style.display='block';
@@ -472,7 +473,7 @@ async function submitLog() {
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({action:'addLog',date,clientName:currentUser,
         water:water||0,proteinHit:habits.protein,noAlcohol:habits.alcohol,
-        exercise:habits.exercise,sleep:sleep||0,steps:steps||0,
+        exercise:habits.exercise,exerciseCompleted:habits.exercise,sleep:sleep||0,steps:steps||0,
         fruitsVeg:fv||0,score,notes})
     });
     const msg = score===100 ? '🏆 Perfect 100/100! Incredible day!' : 'Habits logged! Score: '+score+'/100 💪';
@@ -559,7 +560,7 @@ function renderLogCard(l,showName){
   const isPerfect=score===100;
   const protein=l['Protein Target Hit']==='Yes';
   const alcohol=l['No Alcohol']==='Yes';
-  const exercise=l['Exercise Completed']==='Yes';
+  const exercise=l['Exercise Completed']==='Yes' || l['exercise']==='true' || l['exercise']===true || l['exercise']==='Yes';
   const notes=l['Notes']||'';
   const water=l['Water (L)'];const sleep=l['Sleep (hrs)'];const steps=l['Steps'];const fv=l['Fruit & Veg Portions'];
   return `
@@ -587,11 +588,17 @@ function renderLogCard(l,showName){
 }
 
 function today(){return new Date().toISOString().split('T')[0];}
-function formatDate(d){if(!d)return'';const p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
+function formatDate(d){
+  if(!d) return '';
+  // Handle ISO timestamp from Google Sheets e.g. "2026-05-20T23:00:00.000Z"
+  const clean = String(d).split('T')[0];
+  const p = clean.split('-');
+  return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0] : d;
+}
 
 
 // ── PIN PROTECTION ──
-const COACH_PIN = '5143'; // ← CHANGE THIS to your own PIN
+const COACH_PIN = '1234'; // ← CHANGE THIS to your own PIN
 let pinEntry = '';
 let coachUnlocked = false;
 
