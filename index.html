@@ -64,9 +64,9 @@
   .habit-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
   .habit-grid.single{grid-template-columns:1fr}
   .field label{display:block;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
-  .field select,.field textarea,.field input[type="date"]{width:100%;background:#f8fdf4;border:2px solid var(--border);border-radius:8px;color:var(--text);font-family:"DM Sans",sans-serif;font-size:14px;padding:10px 12px;outline:none;transition:border-color .2s;-webkit-appearance:none;cursor:pointer}
+  .field select,.field input[type="date"]{width:100%;background:#f8fdf4;border:3px solid var(--border);border-radius:14px;color:var(--text);font-family:"DM Sans",sans-serif;font-size:26px;font-weight:700;padding:26px 20px;outline:none;transition:border-color .2s;-webkit-appearance:none;cursor:pointer;min-height:88px} .field textarea{width:100%;background:#f8fdf4;border:3px solid var(--border);border-radius:14px;color:var(--text);font-family:"DM Sans",sans-serif;font-size:20px;padding:20px;outline:none;transition:border-color .2s;resize:vertical;min-height:80px}
   .field select:focus,.field textarea:focus,.field input[type="date"]:focus{border-color:var(--green)}
-  .field textarea{resize:vertical;min-height:60px;cursor:text}
+
 
   .toggle-row{display:flex;flex-direction:column;gap:10px;margin-bottom:14px}
   .toggle-item{display:flex;align-items:center;justify-content:space-between;background:#f8fdf4;border:2px solid var(--border);border-radius:10px;padding:12px 14px;cursor:pointer;transition:border-color .2s,background .2s;user-select:none}
@@ -326,7 +326,7 @@
 </div>
 
 <script>
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby0FsfiEBZcbaoLtNtfExIpHNaRkuylq-qjrLZITIQIJUn4JQKuvrlfmm4wiyWbQvmf/exec';
+const SCRIPT_URL = '';
 
 let currentUser = '';
 let habits = {protein:false,alcohol:false,exercise:false};
