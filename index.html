@@ -115,21 +115,21 @@
   .empty-state{text-align:center;padding:40px 20px;color:var(--muted);font-size:14px}
   .empty-state .icon{font-size:36px;margin-bottom:10px}
 
-  .pin-overlay{{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:center;justify-content:center}}
-  .pin-modal{{background:var(--white);border-radius:16px;padding:32px 28px;text-align:center;width:300px;box-shadow:0 8px 32px rgba(0,0,0,.15)}}
-  .pin-modal img{{height:70px;margin-bottom:14px}}
-  .pin-modal h3{{font-family:"Nunito",sans-serif;font-size:18px;font-weight:800;color:var(--green-dark);margin-bottom:6px}}
-  .pin-modal p{{font-size:13px;color:var(--muted);margin-bottom:18px}}
-  .pin-dots{{display:flex;justify-content:center;gap:12px;margin-bottom:20px}}
-  .pin-dot{{width:16px;height:16px;border-radius:50%;border:2px solid var(--border);background:transparent;transition:all .2s}}
-  .pin-dot.filled{{background:var(--green);border-color:var(--green)}}
-  .pin-dot.wrong{{background:var(--red);border-color:var(--red)}}
-  .pin-keypad{{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}}
-  .pin-key{{background:#f8fdf4;border:2px solid var(--border);border-radius:10px;font-family:"Nunito",sans-serif;font-size:20px;font-weight:800;color:var(--green-dark);padding:14px;cursor:pointer;transition:all .2s}}
-  .pin-key:hover{{background:var(--green-light);border-color:var(--green)}}
-  .pin-key:active{{transform:scale(.95)}}
-  .pin-key.del{{font-size:16px;color:var(--muted)}}
-  .pin-error{{font-size:12px;color:var(--red);margin-top:10px;min-height:18px;font-weight:600}}
+  .pin-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px}
+  .pin-modal{background:var(--white);border-radius:20px;padding:28px 24px;text-align:center;width:100%;max-width:380px;box-shadow:0 8px 40px rgba(0,0,0,.2)}
+  .pin-modal img{height:64px;width:auto;margin:0 auto 14px;display:block}
+  .pin-modal h3{font-family:"Nunito",sans-serif;font-size:22px;font-weight:800;color:var(--green-dark);margin-bottom:6px}
+  .pin-modal p{font-size:14px;color:var(--muted);margin-bottom:22px}
+  .pin-dots{display:flex;justify-content:center;gap:16px;margin-bottom:26px}
+  .pin-dot{width:20px;height:20px;border-radius:50%;border:2px solid var(--border);background:transparent;transition:all .2s}
+  .pin-dot.filled{background:var(--green);border-color:var(--green)}
+  .pin-dot.wrong{background:var(--red);border-color:var(--red)}
+  .pin-keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;max-width:320px;margin:0 auto}
+  .pin-key{background:#f8fdf4;border:2px solid var(--border);border-radius:16px;font-family:"Nunito",sans-serif;font-size:32px;font-weight:800;color:var(--green-dark);padding:24px 0;cursor:pointer;transition:all .2s;min-height:80px}
+  .pin-key:hover{background:var(--green-light);border-color:var(--green)}
+  .pin-key:active{transform:scale(.95);background:var(--green-light)}
+  .pin-key.del{font-size:24px;color:var(--muted)}
+  .pin-error{font-size:13px;color:var(--red);margin-top:16px;min-height:18px;font-weight:600}
   @media(max-width:480px){.habit-grid{grid-template-columns:1fr}.hero{padding:32px 16px 28px}}
 </style>
 </head>
