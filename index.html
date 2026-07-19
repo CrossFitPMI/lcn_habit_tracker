@@ -348,6 +348,7 @@
       </div>
       <div id="ai-body" style="display:none">
         <div id="ai-pro-welcome" class="ai-pro-welcome" style="display:none">✨ You're on Pro — unlimited daily check-ins.</div>
+        <a class="ai-upgrade-link" id="ai-manage-sub-link" href="#" target="_blank" style="display:none">⚙️ Manage subscription</a>
         <a class="ai-upgrade-link" id="ai-upgrade-link" href="#" target="_blank" style="display:none">✨ Upgrade to Pro — unlimited daily check-ins</a>
         <div class="ai-stat-row">
           <div class="ai-stat"><b id="ai-stat-streak">—</b><span>Day Streak</span></div>
@@ -396,6 +397,12 @@ const WORKER_URL = 'https://lean-comp-coach.michealfitzpatrick.workers.dev';
 /* Stripe Payment Link for the Pro upgrade (Stripe dashboard → Payment Links).
    Leave blank to hide the upgrade button entirely until this is set up. */
 const STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/9B6dRa7yL2Dcd100i02Fa00';
+
+/* Stripe's no-code Customer Portal link (Settings → Billing → Customer portal
+   → Activate link). Lets a Pro client manage/cancel their own subscription —
+   they'll enter their email there and Stripe emails them a one-time code.
+   Leave blank to hide the link until the portal is activated. */
+const STRIPE_CUSTOMER_PORTAL_LINK = 'https://billing.stripe.com/p/login/9B6dRa7yL2Dcd100i02Fa00';
 
 let currentTier = 'free';
 const justUpgraded = new URLSearchParams(location.search).get('upgraded') === '1';
@@ -846,15 +853,20 @@ ${a.recentText || 'No logs yet.'}`;
 class AICapReached extends Error{constructor(msg){super(msg);this.name='AICapReached';}}
 
 function setUpgradeLinks(){
-  if(!STRIPE_PAYMENT_LINK) return;
-  const url=`${STRIPE_PAYMENT_LINK}?prefilled_email=${encodeURIComponent(currentEmail)}`;
-  document.getElementById('ai-upgrade-link').href=url;
-  document.getElementById('ai-upgrade-banner-link').href=url;
+  if(STRIPE_PAYMENT_LINK){
+    const url=`${STRIPE_PAYMENT_LINK}?prefilled_email=${encodeURIComponent(currentEmail)}`;
+    document.getElementById('ai-upgrade-link').href=url;
+    document.getElementById('ai-upgrade-banner-link').href=url;
+  }
+  if(STRIPE_CUSTOMER_PORTAL_LINK){
+    document.getElementById('ai-manage-sub-link').href=STRIPE_CUSTOMER_PORTAL_LINK;
+  }
 }
 function updateProUI(){
   const isPro = currentTier==='pro' || justUpgraded;
   document.getElementById('ai-pro-welcome').style.display = isPro?'block':'none';
   document.getElementById('ai-upgrade-link').style.display = (!isPro && STRIPE_PAYMENT_LINK)?'inline-flex':'none';
+  document.getElementById('ai-manage-sub-link').style.display = (isPro && STRIPE_CUSTOMER_PORTAL_LINK)?'inline-flex':'none';
 }
 
 async function callAICoach(messages,mode){
