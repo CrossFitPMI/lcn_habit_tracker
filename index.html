@@ -155,6 +155,11 @@
   .ai-badge{display:inline-block;background:var(--green-light);color:var(--green-dark);font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:20px;margin-top:4px}
   .ai-toggle-row{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12.5px;color:var(--muted)}
   .ai-notice{background:#fff8e6;border:1px solid var(--orange);border-radius:12px;padding:12px 14px;margin-bottom:14px;font-size:13px;line-height:1.5}
+  .ai-upgrade-link{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:var(--green-dark);text-decoration:none;margin-bottom:12px}
+  .ai-upgrade-link:hover{text-decoration:underline}
+  .ai-upgrade-banner{background:var(--green-light);border:1.5px solid var(--green);border-radius:12px;padding:14px;margin-top:10px;text-align:center}
+  .ai-upgrade-banner a{display:inline-block;margin-top:8px;background:var(--green);color:#fff;text-decoration:none;font-weight:700;font-size:14px;padding:10px 20px;border-radius:10px}
+  .ai-pro-welcome{background:var(--green);color:#fff;border-radius:12px;padding:12px 16px;margin-bottom:14px;font-size:13.5px;font-weight:600;text-align:center}
 </style>
 </head>
 <body>
@@ -342,6 +347,8 @@
         Your coach isn't connected yet — ask CrossFit PMI to finish setup, and check back soon.
       </div>
       <div id="ai-body" style="display:none">
+        <div id="ai-pro-welcome" class="ai-pro-welcome" style="display:none">✨ You're on Pro — unlimited daily check-ins.</div>
+        <a class="ai-upgrade-link" id="ai-upgrade-link" href="#" target="_blank" style="display:none">✨ Upgrade to Pro — unlimited daily check-ins</a>
         <div class="ai-stat-row">
           <div class="ai-stat"><b id="ai-stat-streak">—</b><span>Day Streak</span></div>
           <div class="ai-stat"><b id="ai-stat-avg">—</b><span>7-day Avg</span></div>
@@ -349,6 +356,10 @@
         </div>
         <div class="ai-weak-chip" id="ai-weak-chip"></div>
         <div class="ai-chat-log" id="ai-chat-log"></div>
+        <div id="ai-upgrade-banner" class="ai-upgrade-banner" style="display:none">
+          <div>You've hit today's free check-ins.</div>
+          <a href="#" id="ai-upgrade-banner-link" target="_blank">Upgrade to Pro →</a>
+        </div>
         <div class="ai-input-row">
           <input type="text" id="ai-chat-input" placeholder="Type a reply…" onkeydown="if(event.key==='Enter')sendAIMessage()">
           <button onclick="sendAIMessage()" id="ai-send-btn">Send</button>
@@ -382,9 +393,13 @@ const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby0FsfiEBZcbaoLtNtfE
    key, enforces the daily cap, routes chat to Haiku and summaries to Sonnet). */
 const WORKER_URL = 'https://lean-comp-coach.michealfitzpatrick.workers.dev';
 
-/* Every client is 'free' tier by default until you have a real way to check
-   who's paying (e.g. cross-reference a paid-clients list). Safe default. */
-let currentClientTier = 'free';
+/* Stripe Payment Link for the Pro upgrade (Stripe dashboard → Payment Links).
+   Leave blank to hide the upgrade button entirely until this is set up. */
+const STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/9B6dRa7yL2Dcd100i02Fa00';
+
+let currentTier = 'free';
+const justUpgraded = new URLSearchParams(location.search).get('upgraded') === '1';
+if(justUpgraded) history.replaceState({}, '', location.pathname);
 
 let currentUser = '';
 let currentEmail = '';
@@ -809,6 +824,9 @@ async function openAICoachTab(){
   document.getElementById('ai-stat-total').textContent=a.total;
   document.getElementById('ai-weak-chip').textContent=`Weakest lever right now: ${a.weakest.label} (${a.weakest.rate}% of target over the last 7 logs)`;
 
+  setUpgradeLinks();
+  updateProUI();
+
   aiSystemPrompt=`You are the Lean Comp Nutrition coach, texting ${currentUser} directly for their check-in.
 Voice: direct, warm, no corporate fluff, like a real coach who knows this client's numbers. Short messages, 2-4 sentences max.
 Never invent a statistic that is not in the data below. If you don't have a number, don't guess it.
@@ -827,15 +845,28 @@ ${a.recentText || 'No logs yet.'}`;
 
 class AICapReached extends Error{constructor(msg){super(msg);this.name='AICapReached';}}
 
+function setUpgradeLinks(){
+  if(!STRIPE_PAYMENT_LINK) return;
+  const url=`${STRIPE_PAYMENT_LINK}?prefilled_email=${encodeURIComponent(currentEmail)}`;
+  document.getElementById('ai-upgrade-link').href=url;
+  document.getElementById('ai-upgrade-banner-link').href=url;
+}
+function updateProUI(){
+  const isPro = currentTier==='pro' || justUpgraded;
+  document.getElementById('ai-pro-welcome').style.display = isPro?'block':'none';
+  document.getElementById('ai-upgrade-link').style.display = (!isPro && STRIPE_PAYMENT_LINK)?'inline-flex':'none';
+}
+
 async function callAICoach(messages,mode){
   const res=await fetch(WORKER_URL,{
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({clientId:currentUser,tier:currentClientTier,mode,system:aiSystemPrompt,messages})
+    body:JSON.stringify({clientId:currentEmail,mode,system:aiSystemPrompt,messages})
   });
   const data=await res.json();
   if(res.status===429&&data.error==='cap_reached') throw new AICapReached(data.message);
   if(!res.ok) throw new Error(data.error||'proxy_error');
+  if(data.tier){ currentTier=data.tier; updateProUI(); }
   return (data.text||'').trim();
 }
 
@@ -852,6 +883,7 @@ function lockAIInput(){
   document.getElementById('ai-chat-input').disabled=true;
   document.getElementById('ai-send-btn').disabled=true;
   document.getElementById('ai-chat-input').placeholder='Daily limit reached';
+  if(STRIPE_PAYMENT_LINK) document.getElementById('ai-upgrade-banner').style.display='block';
 }
 
 async function startAISession(){
