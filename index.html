@@ -369,7 +369,7 @@
             <tr><td>Daily check-ins</td><td>5 messages</td><td class="pro-col">Unlimited</td></tr>
             <tr><td>Coaching model</td><td>Standard</td><td class="pro-col">Advanced — sharper, more specific</td></tr>
             <tr><td>Session summary</td><td>Key insight only</td><td class="pro-col">Full: insight, action item &amp; pattern</td></tr>
-            <tr><td>Habit trends</td><td>This week's snapshot</td><td class="pro-col">Month-on-month progress</td></tr>
+            <tr><td>Habit trends</td><td>This week's snapshot</td><td class="pro-col">Week-on-week progress</td></tr>
           </table>
         </div>
         <div class="ai-stat-row">
@@ -838,13 +838,13 @@ function computeAIAnalytics(logs){
     `${l['Date']}: water ${l['Water (L)']||0}L, sleep ${l['Sleep (hrs)']||0}h, steps ${l['Steps']||0}, fruit/veg ${l['Fruit & Veg Portions']||0}, protein hit: ${l['Protein Target Hit']||'No'}, no alcohol: ${l['No Alcohol']||'No'}, exercise: ${l['Exercise Completed']||'No'}, score ${l._score}/100${l['Notes']?', notes: "'+l['Notes']+'"':''}`
   ).join('\n');
 
-  // Month-on-month trends: current calendar month vs the previous one.
-  const monthKey=d=>String(d).slice(0,7);
-  const nowD=new Date();
-  const thisKey=`${nowD.getFullYear()}-${String(nowD.getMonth()+1).padStart(2,'0')}`;
-  const prevD=new Date(nowD.getFullYear(),nowD.getMonth()-1,1);
-  const prevKey=`${prevD.getFullYear()}-${String(prevD.getMonth()+1).padStart(2,'0')}`;
-  const monthStats=logs2=>{
+  // Week-on-week trends: the last 7 days vs the 7 days before that
+  // (rolling windows — more immediate and motivating than calendar months).
+  const dayMs=86400000;
+  const todayD=new Date();todayD.setHours(0,0,0,0);
+  const inWindow=(d,from,to)=>{const t=new Date(d);t.setHours(0,0,0,0);return t>=from&&t<=to;};
+  const thisFrom=new Date(todayD-6*dayMs), lastFrom=new Date(todayD-13*dayMs), lastTo=new Date(todayD-7*dayMs);
+  const weekStats=logs2=>{
     if(!logs2.length) return null;
     return {
       avg:Math.round(logs2.reduce((a,l)=>a+l._score,0)/logs2.length),
@@ -853,9 +853,9 @@ function computeAIAnalytics(logs){
       exercise:Math.round(logs2.filter(l=>l['Exercise Completed']==='Yes').length/logs2.length*100),
     };
   };
-  const thisMonth=monthStats(scored.filter(l=>monthKey(l['Date'])===thisKey));
-  const lastMonth=monthStats(scored.filter(l=>monthKey(l['Date'])===prevKey));
-  const trends={hasLastMonth:!!(thisMonth&&lastMonth),thisMonth,lastMonth};
+  const thisWeek=weekStats(scored.filter(l=>inWindow(l['Date'],thisFrom,todayD)));
+  const lastWeek=weekStats(scored.filter(l=>inWindow(l['Date'],lastFrom,lastTo)));
+  const trends={hasPrev:!!(thisWeek&&lastWeek),thisWeek,lastWeek};
 
   return {total,avg7,streak,rates,weakest:{key:weakestKey,label:labels[weakestKey],rate:rates[weakestKey]},recentText,trends};
 }
@@ -891,7 +891,7 @@ ${currentUser}'s real data:
 - Habit hit-rates (last 7 logs): water ${a.rates.water}%, sleep ${a.rates.sleep}%, steps ${a.rates.steps}%, fruit/veg ${a.rates.fv}%, protein target ${a.rates.protein}%, no-alcohol ${a.rates.alcohol}%, exercise ${a.rates.exercise}%
 - Last 5 logged days:
 ${a.recentText || 'No logs yet.'}
-${a.trends.hasLastMonth?`- Month-on-month: avg score ${a.trends.thisMonth.avg} this month vs ${a.trends.lastMonth.avg} last month; protein ${a.trends.thisMonth.protein}% vs ${a.trends.lastMonth.protein}%; no-alcohol ${a.trends.thisMonth.alcohol}% vs ${a.trends.lastMonth.alcohol}%; exercise ${a.trends.thisMonth.exercise}% vs ${a.trends.lastMonth.exercise}%`:''}`;
+${a.trends.hasPrev?`- Week-on-week: avg score ${a.trends.thisWeek.avg} this week vs ${a.trends.lastWeek.avg} last week; protein ${a.trends.thisWeek.protein}% vs ${a.trends.lastWeek.protein}%; no-alcohol ${a.trends.thisWeek.alcohol}% vs ${a.trends.lastWeek.alcohol}%; exercise ${a.trends.thisWeek.exercise}% vs ${a.trends.lastWeek.exercise}%`:''}`;
 
   startAISession();
 }
@@ -924,21 +924,21 @@ function renderTrends(isPro){
   const el=document.getElementById('ai-trends');
   if(!el || !lastAIAnalytics || !lastAIAnalytics.trends) return;
   const t=lastAIAnalytics.trends;
-  if(!t.hasLastMonth){
-    el.innerHTML=`<div class="ai-trend-line">📈 Month-on-month trends will appear here once you have a full month of logs behind you.</div>`;
+  if(!t.hasPrev){
+    el.innerHTML=`<div class="ai-trend-line">📈 Week-on-week trends will appear here once you have two weeks of logs behind you.</div>`;
     return;
   }
   const arrow=(now,prev)=> now>prev?'↑':(now<prev?'↓':'→');
   const lines=[
-    `Avg daily score: <b>${t.thisMonth.avg}</b> this month vs ${t.lastMonth.avg} last month ${arrow(t.thisMonth.avg,t.lastMonth.avg)}`,
-    `Protein target: <b>${t.thisMonth.protein}%</b> vs ${t.lastMonth.protein}% ${arrow(t.thisMonth.protein,t.lastMonth.protein)}`,
-    `Alcohol-free days: <b>${t.thisMonth.alcohol}%</b> vs ${t.lastMonth.alcohol}% ${arrow(t.thisMonth.alcohol,t.lastMonth.alcohol)}`,
-    `Exercise: <b>${t.thisMonth.exercise}%</b> vs ${t.lastMonth.exercise}% ${arrow(t.thisMonth.exercise,t.lastMonth.exercise)}`,
+    `Avg daily score: <b>${t.thisWeek.avg}</b> this week vs ${t.lastWeek.avg} last week ${arrow(t.thisWeek.avg,t.lastWeek.avg)}`,
+    `Protein target: <b>${t.thisWeek.protein}%</b> vs ${t.lastWeek.protein}% ${arrow(t.thisWeek.protein,t.lastWeek.protein)}`,
+    `Alcohol-free days: <b>${t.thisWeek.alcohol}%</b> vs ${t.lastWeek.alcohol}% ${arrow(t.thisWeek.alcohol,t.lastWeek.alcohol)}`,
+    `Exercise: <b>${t.thisWeek.exercise}%</b> vs ${t.lastWeek.exercise}% ${arrow(t.thisWeek.exercise,t.lastWeek.exercise)}`,
   ];
   if(isPro){
-    el.innerHTML=`<div class="ai-trend-title">📈 Month-on-month</div>`+lines.map(l=>`<div class="ai-trend-line">${l}</div>`).join('');
+    el.innerHTML=`<div class="ai-trend-title">📈 Week-on-week</div>`+lines.map(l=>`<div class="ai-trend-line">${l}</div>`).join('');
   }else{
-    el.innerHTML=`<div class="ai-trend-title">📈 Month-on-month</div>
+    el.innerHTML=`<div class="ai-trend-title">📈 Week-on-week</div>
       <div class="ai-trend-line">${lines[0]}</div>
       <div class="ai-trend-line" style="color:var(--muted)">🔒 Full habit-by-habit trends are part of Pro.</div>`;
   }
