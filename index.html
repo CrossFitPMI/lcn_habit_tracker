@@ -954,13 +954,27 @@ async function endAISession(){
     const clean=raw.replace(/```json|```/g,'').trim();
     const parsed=JSON.parse(clean);
     lastAISummary=parsed;
-    card.innerHTML=`
-      <p style="font-family:'Nunito',sans-serif;font-size:12px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--green-dark);margin-bottom:8px">Session summary</p>
-      <div class="ai-summary-line">${parsed.key_insight}</div>
-      <div class="ai-summary-line">${parsed.action_item}</div>
-      <div class="ai-summary-line">${parsed.pattern_noticed}</div>
-      <span class="ai-badge">Check-in complete</span>
-    `;
+    const isPro = currentTier==='pro' || justUpgraded;
+    const header=`<p style="font-family:'Nunito',sans-serif;font-size:12px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--green-dark);margin-bottom:8px">Session summary</p>`;
+    if(isPro){
+      card.innerHTML=`${header}
+        <div class="ai-summary-line">${parsed.key_insight}</div>
+        <div class="ai-summary-line">${parsed.action_item}</div>
+        <div class="ai-summary-line">${parsed.pattern_noticed}</div>
+        <span class="ai-badge">Check-in complete</span>
+      `;
+    }else{
+      // Free tier: the Worker already strips action_item and pattern_noticed
+      // server-side, so the locked content never reaches this browser at all.
+      // The dots below are pure placeholders.
+      const upgradeHref=STRIPE_PAYMENT_LINK?`${STRIPE_PAYMENT_LINK}?prefilled_email=${encodeURIComponent(currentEmail)}`:'#';
+      card.innerHTML=`${header}
+        <div class="ai-summary-line">${parsed.key_insight}</div>
+        <div class="ai-summary-line" style="color:var(--muted);letter-spacing:2px">Your action item: •••• ••••• ••••••• •••• •• ••••</div>
+        <div class="ai-summary-line" style="color:var(--muted);letter-spacing:2px">Pattern noticed: •••••• •••• ••• •••••••• •• ••••</div>
+        ${STRIPE_PAYMENT_LINK?`<a href="${upgradeHref}" target="_blank" style="display:inline-block;margin-top:6px;background:var(--green);color:#fff;text-decoration:none;font-weight:700;font-size:13px;padding:9px 16px;border-radius:10px">Unlock your full summary — go Pro →</a>`:''}
+      `;
+    }
   }catch(e){
     card.innerHTML='<p style="font-size:13px;color:var(--red)">Could not build a summary this time. Try ending the check-in again.</p>';
   }
