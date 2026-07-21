@@ -63,8 +63,8 @@
   .log-card{background:var(--card);border:1px solid var(--border);border-top:3px solid var(--green);border-radius:16px;padding:22px 20px;box-shadow:var(--shadow);margin-bottom:24px}
   .habit-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
   .habit-grid.single{grid-template-columns:1fr}
-  .field label{display:block;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
-  .field select,.field input[type="date"]{width:100%;background:#f8fdf4;border:3px solid var(--border);border-radius:14px;color:var(--text);font-family:"DM Sans",sans-serif;font-size:26px;font-weight:700;padding:26px 20px;outline:none;transition:border-color .2s;-webkit-appearance:none;cursor:pointer;min-height:88px} .field textarea{width:100%;background:#f8fdf4;border:3px solid var(--border);border-radius:14px;color:var(--text);font-family:"DM Sans",sans-serif;font-size:20px;padding:20px;outline:none;transition:border-color .2s;resize:vertical;min-height:80px}
+  .field label{display:block;font-size:14px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+  .field select,.field input[type="date"]{width:100%;background:#f8fdf4;border:3px solid var(--border);border-radius:14px;color:var(--text);font-family:"DM Sans",sans-serif;font-size:18px;font-weight:700;padding:16px 18px;outline:none;transition:border-color .2s;-webkit-appearance:none;cursor:pointer;min-height:60px} .field textarea{width:100%;background:#f8fdf4;border:3px solid var(--border);border-radius:14px;color:var(--text);font-family:"DM Sans",sans-serif;font-size:17px;padding:18px;outline:none;transition:border-color .2s;resize:vertical;min-height:80px}
   .field select:focus,.field textarea:focus,.field input[type="date"]:focus{border-color:var(--green)}
 
 
@@ -160,6 +160,17 @@
   .ai-upgrade-banner{background:var(--green-light);border:1.5px solid var(--green);border-radius:12px;padding:14px;margin-top:10px;text-align:center}
   .ai-upgrade-banner a{display:inline-block;margin-top:8px;background:var(--green);color:#fff;text-decoration:none;font-weight:700;font-size:14px;padding:10px 20px;border-radius:10px}
   .ai-pro-welcome{background:var(--green);color:#fff;border-radius:12px;padding:12px 16px;margin-bottom:14px;font-size:13.5px;font-weight:600;text-align:center}
+  .ai-compare{display:none;background:var(--white);border:1.5px solid var(--border);border-radius:12px;overflow:hidden;margin:10px 0;font-size:13px}
+  .ai-compare table{width:100%;border-collapse:collapse}
+  .ai-compare th{font-family:"Nunito",sans-serif;font-size:12px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;padding:10px;border-bottom:1.5px solid var(--border)}
+  .ai-compare th.pro-col{background:var(--green-light);color:var(--green-dark)}
+  .ai-compare td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top;line-height:1.4}
+  .ai-compare tr:last-child td{border-bottom:none}
+  .ai-compare td.pro-col{background:#f6fbf1;font-weight:600}
+  .ai-compare-toggle{background:none;border:none;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;padding:0;margin:0 0 10px 0;text-decoration:underline}
+  .ai-trend-title{font-family:"Nunito",sans-serif;font-size:12px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--green-dark);margin-bottom:4px}
+  .ai-trend-line{font-size:12.5px;color:var(--text);line-height:1.6}
+  #ai-trends{margin-bottom:14px}
 </style>
 </head>
 <body>
@@ -202,6 +213,7 @@
         onkeydown="if(event.key==='Enter')doLogin()">
       <div id="login-error" style="color:var(--red);font-size:12.5px;margin-top:8px;min-height:16px"></div>
       <button class="login-btn" onclick="doLogin()">Let's Go →</button>
+      <p style="font-size:11px;color:var(--muted);margin-top:16px;margin-bottom:0;line-height:1.5">Your name, email and habit logs are stored securely and used only for your coaching — nothing is shared or sold. Ask your coach any time to see or delete your data.</p>
     </div>
   </div>
 
@@ -350,12 +362,23 @@
         <div id="ai-pro-welcome" class="ai-pro-welcome" style="display:none">✨ You're on Pro — unlimited daily check-ins.</div>
         <a class="ai-upgrade-link" id="ai-manage-sub-link" href="#" target="_blank" style="display:none">⚙️ Manage subscription</a>
         <a class="ai-upgrade-link" id="ai-upgrade-link" href="#" target="_blank" style="display:none">✨ Upgrade to Pro — unlimited daily check-ins</a>
+        <button class="ai-compare-toggle" id="ai-compare-toggle" style="display:none" onclick="toggleCompare()">What's in Pro?</button>
+        <div class="ai-compare" id="ai-compare">
+          <table>
+            <tr><th></th><th>Free</th><th class="pro-col">Pro — €20/mo</th></tr>
+            <tr><td>Daily check-ins</td><td>5 messages</td><td class="pro-col">Unlimited</td></tr>
+            <tr><td>Coaching model</td><td>Standard</td><td class="pro-col">Advanced — sharper, more specific</td></tr>
+            <tr><td>Session summary</td><td>Key insight only</td><td class="pro-col">Full: insight, action item &amp; pattern</td></tr>
+            <tr><td>Habit trends</td><td>This week's snapshot</td><td class="pro-col">Month-on-month progress</td></tr>
+          </table>
+        </div>
         <div class="ai-stat-row">
           <div class="ai-stat"><b id="ai-stat-streak">—</b><span>Day Streak</span></div>
           <div class="ai-stat"><b id="ai-stat-avg">—</b><span>7-day Avg</span></div>
           <div class="ai-stat"><b id="ai-stat-total">—</b><span>Total Logs</span></div>
         </div>
         <div class="ai-weak-chip" id="ai-weak-chip"></div>
+        <div id="ai-trends"></div>
         <div class="ai-chat-log" id="ai-chat-log"></div>
         <div id="ai-upgrade-banner" class="ai-upgrade-banner" style="display:none">
           <div>You've hit today's free check-ins.</div>
@@ -784,6 +807,7 @@ function normalizeAILog(l){
 let aiSessionStarted=false;
 let aiConversation=[];
 let aiSystemPrompt='';
+let lastAIAnalytics=null;
 
 function computeAIAnalytics(logs){
   const sorted=[...logs].map(normalizeAILog).sort((a,b)=>new Date(a['Date'])-new Date(b['Date']));
@@ -813,7 +837,27 @@ function computeAIAnalytics(logs){
   const recentText=last7.slice(-5).map(l=>
     `${l['Date']}: water ${l['Water (L)']||0}L, sleep ${l['Sleep (hrs)']||0}h, steps ${l['Steps']||0}, fruit/veg ${l['Fruit & Veg Portions']||0}, protein hit: ${l['Protein Target Hit']||'No'}, no alcohol: ${l['No Alcohol']||'No'}, exercise: ${l['Exercise Completed']||'No'}, score ${l._score}/100${l['Notes']?', notes: "'+l['Notes']+'"':''}`
   ).join('\n');
-  return {total,avg7,streak,rates,weakest:{key:weakestKey,label:labels[weakestKey],rate:rates[weakestKey]},recentText};
+
+  // Month-on-month trends: current calendar month vs the previous one.
+  const monthKey=d=>String(d).slice(0,7);
+  const nowD=new Date();
+  const thisKey=`${nowD.getFullYear()}-${String(nowD.getMonth()+1).padStart(2,'0')}`;
+  const prevD=new Date(nowD.getFullYear(),nowD.getMonth()-1,1);
+  const prevKey=`${prevD.getFullYear()}-${String(prevD.getMonth()+1).padStart(2,'0')}`;
+  const monthStats=logs2=>{
+    if(!logs2.length) return null;
+    return {
+      avg:Math.round(logs2.reduce((a,l)=>a+l._score,0)/logs2.length),
+      protein:Math.round(logs2.filter(l=>l['Protein Target Hit']==='Yes').length/logs2.length*100),
+      alcohol:Math.round(logs2.filter(l=>l['No Alcohol']==='Yes').length/logs2.length*100),
+      exercise:Math.round(logs2.filter(l=>l['Exercise Completed']==='Yes').length/logs2.length*100),
+    };
+  };
+  const thisMonth=monthStats(scored.filter(l=>monthKey(l['Date'])===thisKey));
+  const lastMonth=monthStats(scored.filter(l=>monthKey(l['Date'])===prevKey));
+  const trends={hasLastMonth:!!(thisMonth&&lastMonth),thisMonth,lastMonth};
+
+  return {total,avg7,streak,rates,weakest:{key:weakestKey,label:labels[weakestKey],rate:rates[weakestKey]},recentText,trends};
 }
 
 async function openAICoachTab(){
@@ -826,6 +870,7 @@ async function openAICoachTab(){
 
   const myLogs=allLogs.filter(l=>l['Client Email']?l['Client Email']===currentEmail:l['Client Name']===currentUser);
   const a=computeAIAnalytics(myLogs);
+  lastAIAnalytics=a;
   document.getElementById('ai-stat-streak').textContent=a.streak;
   document.getElementById('ai-stat-avg').textContent=a.avg7;
   document.getElementById('ai-stat-total').textContent=a.total;
@@ -845,7 +890,8 @@ ${currentUser}'s real data:
 - Weakest habit over the last 7 logs: ${a.weakest.label} (${a.weakest.rate}% of target)
 - Habit hit-rates (last 7 logs): water ${a.rates.water}%, sleep ${a.rates.sleep}%, steps ${a.rates.steps}%, fruit/veg ${a.rates.fv}%, protein target ${a.rates.protein}%, no-alcohol ${a.rates.alcohol}%, exercise ${a.rates.exercise}%
 - Last 5 logged days:
-${a.recentText || 'No logs yet.'}`;
+${a.recentText || 'No logs yet.'}
+${a.trends.hasLastMonth?`- Month-on-month: avg score ${a.trends.thisMonth.avg} this month vs ${a.trends.lastMonth.avg} last month; protein ${a.trends.thisMonth.protein}% vs ${a.trends.lastMonth.protein}%; no-alcohol ${a.trends.thisMonth.alcohol}% vs ${a.trends.lastMonth.alcohol}%; exercise ${a.trends.thisMonth.exercise}% vs ${a.trends.lastMonth.exercise}%`:''}`;
 
   startAISession();
 }
@@ -862,11 +908,40 @@ function setUpgradeLinks(){
     document.getElementById('ai-manage-sub-link').href=STRIPE_CUSTOMER_PORTAL_LINK;
   }
 }
+function toggleCompare(){
+  const el=document.getElementById('ai-compare');
+  el.style.display = el.style.display==='block' ? 'none' : 'block';
+}
 function updateProUI(){
   const isPro = currentTier==='pro' || justUpgraded;
   document.getElementById('ai-pro-welcome').style.display = isPro?'block':'none';
   document.getElementById('ai-upgrade-link').style.display = (!isPro && STRIPE_PAYMENT_LINK)?'inline-flex':'none';
+  document.getElementById('ai-compare-toggle').style.display = (!isPro && STRIPE_PAYMENT_LINK)?'inline-block':'none';
   document.getElementById('ai-manage-sub-link').style.display = (isPro && STRIPE_CUSTOMER_PORTAL_LINK)?'inline-flex':'none';
+  renderTrends(isPro);
+}
+function renderTrends(isPro){
+  const el=document.getElementById('ai-trends');
+  if(!el || !lastAIAnalytics || !lastAIAnalytics.trends) return;
+  const t=lastAIAnalytics.trends;
+  if(!t.hasLastMonth){
+    el.innerHTML=`<div class="ai-trend-line">📈 Month-on-month trends will appear here once you have a full month of logs behind you.</div>`;
+    return;
+  }
+  const arrow=(now,prev)=> now>prev?'↑':(now<prev?'↓':'→');
+  const lines=[
+    `Avg daily score: <b>${t.thisMonth.avg}</b> this month vs ${t.lastMonth.avg} last month ${arrow(t.thisMonth.avg,t.lastMonth.avg)}`,
+    `Protein target: <b>${t.thisMonth.protein}%</b> vs ${t.lastMonth.protein}% ${arrow(t.thisMonth.protein,t.lastMonth.protein)}`,
+    `Alcohol-free days: <b>${t.thisMonth.alcohol}%</b> vs ${t.lastMonth.alcohol}% ${arrow(t.thisMonth.alcohol,t.lastMonth.alcohol)}`,
+    `Exercise: <b>${t.thisMonth.exercise}%</b> vs ${t.lastMonth.exercise}% ${arrow(t.thisMonth.exercise,t.lastMonth.exercise)}`,
+  ];
+  if(isPro){
+    el.innerHTML=`<div class="ai-trend-title">📈 Month-on-month</div>`+lines.map(l=>`<div class="ai-trend-line">${l}</div>`).join('');
+  }else{
+    el.innerHTML=`<div class="ai-trend-title">📈 Month-on-month</div>
+      <div class="ai-trend-line">${lines[0]}</div>
+      <div class="ai-trend-line" style="color:var(--muted)">🔒 Full habit-by-habit trends are part of Pro.</div>`;
+  }
 }
 
 async function callAICoach(messages,mode){
@@ -895,7 +970,10 @@ function lockAIInput(){
   document.getElementById('ai-chat-input').disabled=true;
   document.getElementById('ai-send-btn').disabled=true;
   document.getElementById('ai-chat-input').placeholder='Daily limit reached';
-  if(STRIPE_PAYMENT_LINK) document.getElementById('ai-upgrade-banner').style.display='block';
+  if(STRIPE_PAYMENT_LINK){
+    document.getElementById('ai-upgrade-banner').style.display='block';
+    document.getElementById('ai-compare').style.display='block';
+  }
 }
 
 async function startAISession(){
