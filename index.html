@@ -133,6 +133,18 @@
   .pin-key.del{font-size:24px;color:var(--muted)}
   .pin-error{font-size:13px;color:var(--red);margin-top:16px;min-height:18px;font-weight:600}
   @media(max-width:480px){.habit-grid{grid-template-columns:1fr}.hero{padding:32px 16px 28px}}
+  @media(max-width:560px){.tab{font-size:10.5px;padding:10px 3px;letter-spacing:.2px}}
+
+  /* ── Streak leaderboard ── */
+  .lb-row{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 16px;margin-bottom:8px}
+  .lb-row.me{border-color:var(--green);border-width:2px;background:#f6fbf1}
+  .lb-rank{font-family:"Nunito",sans-serif;font-size:18px;font-weight:800;color:var(--muted);width:34px;text-align:center;flex-shrink:0}
+  .lb-name{flex:1;font-weight:700;font-size:15px}
+  .lb-name .lb-you{font-size:11px;font-weight:800;color:var(--green-dark);background:var(--green-light);border-radius:8px;padding:2px 8px;margin-left:8px;vertical-align:1px}
+  .lb-streak{font-family:"Nunito",sans-serif;font-size:16px;font-weight:800;color:var(--green-dark);white-space:nowrap}
+  .lb-hidden-note{background:var(--green-light);border-radius:12px;padding:12px 16px;margin-bottom:8px;font-size:13px;color:var(--green-dark);font-weight:600}
+  .lb-toggle-row{display:flex;align-items:center;gap:10px;margin-top:16px;padding:14px 16px;background:var(--card);border:1px solid var(--border);border-radius:12px;font-size:13px;color:var(--muted)}
+  .lb-toggle-row input{width:18px;height:18px;accent-color:var(--green);flex-shrink:0}
 
   /* Tap feedback — every real <button> gets a slight press-down on tap, since
      :hover barely fires on touchscreens and users otherwise get no signal
@@ -242,7 +254,7 @@
         onkeydown="if(event.key==='Enter')doLogin()">
       <div id="login-error" style="color:var(--red);font-size:12.5px;margin-top:8px;min-height:16px"></div>
       <button class="login-btn" onclick="doLogin()">Let's Go →</button>
-      <p style="font-size:11px;color:var(--muted);margin-top:16px;margin-bottom:0;line-height:1.5">Your name, email and habit logs are stored securely and used only for your coaching — nothing is shared or sold. Ask your coach any time to see or delete your data.</p>
+      <p style="font-size:11px;color:var(--muted);margin-top:16px;margin-bottom:0;line-height:1.5">Your name, email and habit logs are stored securely and used only for your coaching — nothing is shared or sold. Your logging streak (just the number of days, nothing else) appears on the gym's streak board; you can hide it any time in the Streaks tab. Ask your coach any time to see or delete your data.</p>
     </div>
   </div>
 
@@ -251,6 +263,7 @@
     <div class="tabs">
       <button class="tab active" onclick="switchTab('log',this)">📋 Log Today</button>
       <button class="tab" onclick="switchTab('history',this)">📊 My History</button>
+      <button class="tab" onclick="switchTab('streaks',this)">🏆 Streaks</button>
       <button class="tab" onclick="switchTab('aicoach',this)">🤖 AI Coach</button>
       <button class="tab" onclick="switchTab('coach',this)">👁️ Coach View</button>
     </div>
@@ -380,6 +393,19 @@
         <div class="skeleton"><div class="skel-line" style="height:18px;width:40%"></div><div class="skel-line" style="height:13px;width:65%"></div></div>
         <div class="skeleton"><div class="skel-line" style="height:18px;width:55%"></div><div class="skel-line" style="height:13px;width:45%"></div></div>
       </div>
+    </div>
+
+    <div id="tab-streaks" style="display:none">
+      <div class="section-label">Gym Streaks</div>
+      <p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">Consecutive days logged — everyone at the gym who's tracking. Keep yours alive. 🔥</p>
+      <div id="lb-list">
+        <div class="skeleton"><div class="skel-line" style="height:18px;width:45%"></div><div class="skel-line" style="height:13px;width:60%"></div></div>
+        <div class="skeleton"><div class="skel-line" style="height:18px;width:55%"></div><div class="skel-line" style="height:13px;width:40%"></div></div>
+      </div>
+      <label class="lb-toggle-row">
+        <input type="checkbox" id="lb-hide-toggle" onchange="setLeaderboardHidden(this.checked)">
+        <span>Hide me from the leaderboard — your streak stays private to you and your coach.</span>
+      </label>
     </div>
 
     <div id="tab-aicoach" style="display:none">
@@ -581,13 +607,14 @@ function showApp() {
 // ── TABS ──
 function switchTab(tab,btn) {
   if(tab==='coach' && !coachUnlocked) { showPinModal(); return; }
-  ['log','history','aicoach','coach'].forEach(t=>document.getElementById('tab-'+t).style.display='none');
+  ['log','history','streaks','aicoach','coach'].forEach(t=>document.getElementById('tab-'+t).style.display='none');
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
   document.getElementById('tab-'+tab).style.display='block';
   btn.classList.add('active');
   if(tab==='history') renderMyHistory();
   if(tab==='coach')   renderCoachView();
   if(tab==='aicoach') openAICoachTab();
+  if(tab==='streaks') renderStreaks();
 }
 
 // ── TOGGLES ──
@@ -809,6 +836,90 @@ function checkPin() {
 const savedName=localStorage.getItem('lcn_user');
 const savedEmail=localStorage.getItem('lcn_email');
 if(savedName && savedEmail){currentUser=savedName;currentEmail=savedEmail;showApp();}
+
+// ── STREAK LEADERBOARD ──
+// Computed entirely from allLogs (already fetched for other tabs) — grouped
+// by email where present, falling back to name for pre-email rows. Hidden
+// preferences come from the Apps Script prefs sheet.
+
+let lbPrefs=[];
+
+function calcStreakFromLogs(logs){
+  const dates=[...new Set(logs.map(l=>String(l['Date']).slice(0,10)))].sort().reverse();
+  let streak=0;
+  const now=new Date();now.setHours(0,0,0,0);
+  for(let i=0;i<dates.length;i++){
+    const d=new Date(dates[i]);d.setHours(0,0,0,0);
+    const diff=Math.round((now-d)/86400000);
+    if(diff===i||diff===i+1)streak++;else break;
+  }
+  return streak;
+}
+
+async function renderStreaks(){
+  await loadLogs(); // fresh data so today's logs count
+  try{
+    const res=await fetch(SCRIPT_URL+'?action=getPrefs');
+    lbPrefs=await res.json();
+    if(!Array.isArray(lbPrefs)) lbPrefs=[];
+  }catch(e){ lbPrefs=[]; }
+
+  const meHidden=lbPrefs.some(p=>p.email===currentEmail&&p.hidden);
+  document.getElementById('lb-hide-toggle').checked=meHidden;
+
+  // Group logs per identity: email where present, else name.
+  const groups={};
+  const normalized=allLogs.map(normalizeAILog);
+  normalized.forEach(l=>{
+    const email=(l['Client Email']||'').toLowerCase();
+    const key=email||('name:'+(l['Client Name']||''));
+    if(!groups[key]) groups[key]={email,name:l['Client Name']||'—',logs:[]};
+    groups[key].logs.push(l);
+    if(l['Client Name']) groups[key].name=l['Client Name']; // keep most recent name
+  });
+
+  const entries=Object.values(groups)
+    .map(g=>({...g,streak:calcStreakFromLogs(g.logs),
+      hidden:g.email?lbPrefs.some(p=>p.email===g.email&&p.hidden):false,
+      isMe:g.email?g.email===currentEmail:g.name===currentUser}))
+    .filter(g=>g.streak>0);
+
+  const visible=entries.filter(g=>!g.hidden).sort((a,b)=>b.streak-a.streak).slice(0,10);
+  const me=entries.find(g=>g.isMe);
+
+  const list=document.getElementById('lb-list');
+  let html='';
+
+  if(me&&me.hidden){
+    html+=`<div class="lb-hidden-note">You're hidden from the board. Your streak: ${me.streak} day${me.streak===1?'':'s'} 🔥 — only you and your coach can see it.</div>`;
+  }
+
+  if(!visible.length){
+    html+=`<div class="empty-state"><div class="icon">🔥</div>No active streaks yet — log today and start the board off!</div>`;
+  }else{
+    const medals=['🥇','🥈','🥉'];
+    html+=visible.map((g,i)=>`
+      <div class="lb-row${g.isMe?' me':''}">
+        <div class="lb-rank">${medals[i]||(i+1)}</div>
+        <div class="lb-name">${g.name}${g.isMe?'<span class="lb-you">YOU</span>':''}</div>
+        <div class="lb-streak">🔥 ${g.streak} day${g.streak===1?'':'s'}</div>
+      </div>`).join('');
+  }
+  list.innerHTML=html;
+}
+
+async function setLeaderboardHidden(hidden){
+  // Optimistic update; persists via the Apps Script prefs sheet.
+  const existing=lbPrefs.find(p=>p.email===currentEmail);
+  if(existing) existing.hidden=hidden;
+  else lbPrefs.push({email:currentEmail,hidden});
+  try{
+    await fetch(SCRIPT_URL,{method:'POST',mode:'no-cors',
+      headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({action:'setPref',email:currentEmail,hidden})});
+  }catch(e){}
+  renderStreaks();
+}
 
 // ── AI COACH ──
 // Reuses this file's own scoreWater/scoreSleep/scoreSteps/scoreFV/calcLogScore
