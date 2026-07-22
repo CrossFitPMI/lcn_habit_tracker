@@ -1012,6 +1012,7 @@ function renderMealPrefsForm(){
       <label>Variety</label>
       <select id="mpf-variety">${['Keep it simple — repeats are fine','Mix it up — different every night'].map(s=>`<option ${p.variety===s?'selected':''}>${s}</option>`).join('')}</select>
       <button class="mp-btn" onclick="saveMealPrefs()">Save preferences</button>
+      ${lastMealPlan?`<button class="ai-end-btn" onclick="renderMealPlan(lastMealPlan)" style="margin-top:8px">← Back to my plan</button>`:''}
     </div>`;
 }
 
@@ -1032,9 +1033,16 @@ async function saveMealPrefs(){
       headers:{'Content-Type':'text/plain'},
       body:JSON.stringify({action:'setMealPrefs',email:currentEmail,prefs:mealPrefs})});
   }catch(e){}
-  lastMealPlan=null;
-  localStorage.removeItem('lcn_last_mealplan_'+currentEmail);
+  // Keep the existing plan — regenerating costs a daily slot, so that stays
+  // the client's choice, not an automatic side effect of editing prefs.
   renderMealPlanCard();
+  if(lastMealPlan){
+    const body=document.getElementById('mp-body');
+    const n=document.createElement('div');
+    n.className='ai-notice';
+    n.textContent='Preferences saved — hit Regenerate below when you want a plan built with them.';
+    body.prepend(n);
+  }
 }
 
 async function generateMealPlan(){
@@ -1065,8 +1073,7 @@ Rules: calories and protein_g are PER PERSON estimates. instructions is 2-5 shor
       body:JSON.stringify({clientId:currentEmail,mode:'mealplan',messages:[{role:'user',content:prompt}]})});
     const data=await res.json();
     if(!res.ok){
-      body.innerHTML=`<div class="mp-locked">${data.message||'Could not build a plan right now — try again shortly.'}</div>
-        <button class="ai-end-btn" onclick="renderMealPlanCard()">Back</button>`;
+      showMealPlanError(data.message||'Could not build a plan right now — try again shortly.');
       return;
     }
     const parsed=JSON.parse((data.text||'').replace(/```json|```/g,'').trim());
@@ -1074,7 +1081,22 @@ Rules: calories and protein_g are PER PERSON estimates. instructions is 2-5 shor
     localStorage.setItem('lcn_last_mealplan_'+currentEmail,JSON.stringify(parsed));
     renderMealPlan(parsed);
   }catch(e){
-    body.innerHTML=`<div class="mp-locked">That one didn't come out right — hit generate again.</div>
+    showMealPlanError("That one didn't come out right — hit generate again.");
+  }
+}
+
+/* Generation failed or capped: never lose the plan they already have —
+   re-render it with the message on top instead of replacing it. */
+function showMealPlanError(msg){
+  const body=document.getElementById('mp-body');
+  if(lastMealPlan){
+    renderMealPlan(lastMealPlan);
+    const n=document.createElement('div');
+    n.className='ai-notice';
+    n.textContent=msg;
+    body.prepend(n);
+  }else{
+    body.innerHTML=`<div class="mp-locked">${msg}</div>
       <button class="ai-end-btn" onclick="renderMealPlanCard()">Back</button>`;
   }
 }
@@ -1117,18 +1139,21 @@ function printShoppingList(){
   if(!w){ alert('Allow pop-ups for this site to save the PDF.'); return; }
   w.document.write(`<!DOCTYPE html><html><head><title>Shopping List — Lean Comp Nutrition</title>
     <style>
-      body{font-family:-apple-system,'Segoe UI',sans-serif;color:#1a2e0a;max-width:640px;margin:0 auto;padding:28px 24px}
-      .hd{display:flex;align-items:center;gap:14px;border-bottom:3px solid #5a9e2f;padding-bottom:14px;margin-bottom:6px}
-      .hd img{height:56px}
-      .hd .t1{font-size:20px;font-weight:800;color:#3d7a1a;letter-spacing:.5px}
+      /* Phone-ratio page where the browser honours it (Chrome/Android);
+         elsewhere falls back to full-width on the default paper size. */
+      @page{size:120mm 240mm;margin:8mm}
+      body{font-family:-apple-system,'Segoe UI',sans-serif;color:#1a2e0a;margin:0;padding:14px 12px}
+      .hd{display:flex;align-items:center;gap:12px;border-bottom:3px solid #5a9e2f;padding-bottom:12px;margin-bottom:4px}
+      .hd img{height:48px}
+      .hd .t1{font-size:19px;font-weight:800;color:#3d7a1a;letter-spacing:.5px}
       .hd .t1 span{color:#cc2200}
       .hd .t2{font-size:12px;color:#7a9060;font-weight:600}
-      h2{font-size:15px;color:#3d7a1a;text-transform:uppercase;letter-spacing:1px;margin:18px 0 4px}
-      h3{font-size:13px;color:#3d7a1a;text-transform:uppercase;letter-spacing:.5px;margin:16px 0 4px}
-      ul{margin:0;padding-left:2px;list-style:none}
-      li{font-size:13.5px;line-height:1.9;border-bottom:1px dotted #ddeece;padding-left:26px;position:relative}
-      li::before{content:"";position:absolute;left:2px;top:8px;width:12px;height:12px;border:1.8px solid #5a9e2f;border-radius:3px}
-      .ft{margin-top:26px;font-size:11px;color:#7a9060;border-top:1px solid #ddeece;padding-top:10px}
+      h2{font-size:15px;color:#3d7a1a;text-transform:uppercase;letter-spacing:1px;margin:14px 0 2px}
+      h3{font-size:13.5px;color:#3d7a1a;text-transform:uppercase;letter-spacing:.5px;margin:14px 0 2px}
+      ul{margin:0;padding-left:0;list-style:none}
+      li{font-size:16px;line-height:2.2;border-bottom:1px dotted #ddeece;padding-left:30px;position:relative}
+      li::before{content:"";position:absolute;left:2px;top:11px;width:15px;height:15px;border:2px solid #5a9e2f;border-radius:4px}
+      .ft{margin-top:20px;font-size:11px;color:#7a9060;border-top:1px solid #ddeece;padding-top:8px;line-height:1.5}
       @media print{body{padding:0}}
     </style></head><body>
     <div class="hd">${logoSrc?`<img src="${logoSrc}">`:''}<div><div class="t1">LEAN COMP <span>NUTRITION</span></div><div class="t2">Weekly shopping list · ${new Date().toLocaleDateString('en-IE')}</div></div></div>
