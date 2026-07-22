@@ -146,6 +146,21 @@
   .lb-toggle-row{display:flex;align-items:center;gap:10px;margin-top:16px;padding:14px 16px;background:var(--card);border:1px solid var(--border);border-radius:12px;font-size:13px;color:var(--muted)}
   .lb-toggle-row input{width:18px;height:18px;accent-color:var(--green);flex-shrink:0}
 
+  /* ── Meal plan ── */
+  .mp-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-top:16px}
+  .mp-title{font-family:"Nunito",sans-serif;font-size:13px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--green-dark);margin-bottom:10px}
+  .mp-form label{display:block;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:10px 0 4px}
+  .mp-form select,.mp-form input[type=text]{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;background:#f8fdf4;color:var(--text);outline:none}
+  .mp-form select:focus,.mp-form input:focus{border-color:var(--green)}
+  .mp-day{border-left:3px solid var(--green);padding:8px 12px;margin-bottom:8px;background:#f8fdf4;border-radius:0 10px 10px 0}
+  .mp-day b{font-size:14px}
+  .mp-day .mp-meta{font-size:11.5px;color:var(--muted);font-weight:600}
+  .mp-day p{font-size:13px;margin:3px 0 0;line-height:1.45}
+  .mp-shop-cat{font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--green-dark);margin:10px 0 4px}
+  .mp-shop-items{font-size:13.5px;line-height:1.7}
+  .mp-safety{background:#fff8e6;border:1px solid var(--orange);border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.5;margin-top:12px;color:var(--text)}
+  .mp-locked{text-align:center;padding:18px;color:var(--muted);font-size:13.5px;line-height:1.6}
+
   /* Tap feedback — every real <button> gets a slight press-down on tap, since
      :hover barely fires on touchscreens and users otherwise get no signal
      that their tap registered. */
@@ -425,6 +440,7 @@
             <tr><td>Coaching model</td><td>Standard</td><td class="pro-col">Advanced — sharper, more specific</td></tr>
             <tr><td>Session summary</td><td>Key insight only</td><td class="pro-col">Full: insight, action item &amp; pattern</td></tr>
             <tr><td>Habit trends</td><td>This week's snapshot</td><td class="pro-col">Week-on-week progress</td></tr>
+            <tr><td>Weekly meal plan</td><td>—</td><td class="pro-col">Plan + shopping list, built around you</td></tr>
           </table>
         </div>
         <div class="ai-stat-row">
@@ -445,6 +461,10 @@
         </div>
         <button class="ai-end-btn" onclick="endAISession()">End check-in &amp; get summary</button>
         <div id="ai-summary-card" style="display:none;margin-top:16px"></div>
+        <div class="mp-card" id="mp-card">
+          <div class="mp-title">🍽️ Weekly Meal Plan</div>
+          <div id="mp-body"></div>
+        </div>
       </div>
     </div>
 
@@ -674,11 +694,23 @@ function showStatus(msg,type){
 }
 
 // ── LOAD ──
+/* Converts any date value from the sheet to the correct LOCAL calendar day.
+   Sheets stores picked dates as local midnight; serialized as UTC that can
+   land on the previous day (Irish summer = UTC+1). Parsing then reading
+   local date components undoes the shift. Plain "yyyy-MM-dd" passes through. */
+function normalizeDateStr(v){
+  const s=String(v||'');
+  if(!s.includes('T')) return s;
+  const d=new Date(s);
+  if(isNaN(d)) return s.split('T')[0];
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
 async function loadLogs(){
   try{
     const res=await fetch(SCRIPT_URL+'?action=getLogs');
     const data=await res.json();
-    allLogs=Array.isArray(data)?data:[];
+    allLogs=(Array.isArray(data)?data:[]).map(l=>({...l,'Date':normalizeDateStr(l['Date'])}));
     updateStreakBar();
   }catch(e){allLogs=[];}
 }
@@ -921,6 +953,128 @@ async function setLeaderboardHidden(hidden){
   renderStreaks();
 }
 
+// ── WEEKLY MEAL PLAN (Pro) ──
+// Prefs stored per-client in the sheet; generation runs through the Worker's
+// 'mealplan' mode (Pro-only, enforced server-side). Allergies and avoid-lists
+// are passed as ABSOLUTE constraints, and every rendered plan carries a
+// check-it-yourself note — AI is good at this but must not be the last line
+// of defence for a real allergy.
+
+let mealPrefs=null;
+let lastMealPlan=null;
+
+async function loadMealPrefs(){
+  try{
+    const res=await fetch(SCRIPT_URL+'?action=getMealPrefs&email='+encodeURIComponent(currentEmail));
+    mealPrefs=await res.json();
+  }catch(e){ mealPrefs=null; }
+}
+
+function renderMealPlanCard(){
+  const body=document.getElementById('mp-body');
+  const isPro = currentTier==='pro' || justUpgraded;
+  if(!isPro){
+    const upgradeHref=STRIPE_PAYMENT_LINK?`${STRIPE_PAYMENT_LINK}?prefilled_email=${encodeURIComponent(currentEmail)}`:'';
+    body.innerHTML=`<div class="mp-locked">🔒 A weekly meal plan and shopping list, built around your habits, your kitchen, and anything you need to avoid — part of Pro.${upgradeHref?`<br><a href="${upgradeHref}" target="_blank" class="btn-solid" style="display:inline-block;margin-top:10px;background:var(--green);color:#fff;text-decoration:none;font-weight:700;font-size:13px;padding:9px 16px;border-radius:10px">Upgrade to Pro →</a>`:''}</div>`;
+    return;
+  }
+  const saved=localStorage.getItem('lcn_last_mealplan_'+currentEmail);
+  if(saved && !lastMealPlan){ try{ lastMealPlan=JSON.parse(saved); }catch(e){} }
+  if(lastMealPlan){ renderMealPlan(lastMealPlan); return; }
+  if(!mealPrefs){ renderMealPrefsForm(); return; }
+  body.innerHTML=`<button onclick="generateMealPlan()" style="width:100%;margin-top:0">Generate this week's plan</button>
+    <button class="ai-end-btn" onclick="renderMealPrefsForm()" style="margin-top:8px">Update my preferences</button>`;
+}
+
+function renderMealPrefsForm(){
+  const p=mealPrefs||{};
+  document.getElementById('mp-body').innerHTML=`
+    <div class="mp-form">
+      <label>How many people are you cooking for?</label>
+      <select id="mpf-household">${[1,2,3,4,5,6].map(n=>`<option ${p.household==n?'selected':''}>${n}</option>`).join('')}</select>
+      <label>Dinners to plan this week</label>
+      <select id="mpf-dinners">${[3,5,7].map(n=>`<option ${p.dinners==n?'selected':''}>${n}</option>`).join('')}</select>
+      <label>Max cooking time per meal</label>
+      <select id="mpf-time">${[15,30,45,60].map(n=>`<option ${p.time==n?'selected':''} value="${n}">${n} minutes</option>`).join('')}</select>
+      <label>Eating style</label>
+      <select id="mpf-style">${['Balanced','High protein','Lower carb','Vegetarian','Vegan'].map(s=>`<option ${p.style===s?'selected':''}>${s}</option>`).join('')}</select>
+      <label>Allergies &amp; ingredients to avoid — be thorough, this is treated as a hard rule</label>
+      <input type="text" id="mpf-avoid" placeholder="e.g. peanuts, shellfish, mushrooms" value="${(p.avoid||'').replace(/"/g,'&quot;')}">
+      <label>Variety</label>
+      <select id="mpf-variety">${['Keep it simple — repeats are fine','Mix it up — different every night'].map(s=>`<option ${p.variety===s?'selected':''}>${s}</option>`).join('')}</select>
+      <button onclick="saveMealPrefs()" style="width:100%">Save preferences</button>
+    </div>`;
+}
+
+async function saveMealPrefs(){
+  mealPrefs={
+    household:document.getElementById('mpf-household').value,
+    dinners:document.getElementById('mpf-dinners').value,
+    time:document.getElementById('mpf-time').value,
+    style:document.getElementById('mpf-style').value,
+    avoid:document.getElementById('mpf-avoid').value.trim(),
+    variety:document.getElementById('mpf-variety').value,
+  };
+  try{
+    await fetch(SCRIPT_URL,{method:'POST',mode:'no-cors',
+      headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({action:'setMealPrefs',email:currentEmail,prefs:mealPrefs})});
+  }catch(e){}
+  lastMealPlan=null;
+  localStorage.removeItem('lcn_last_mealplan_'+currentEmail);
+  renderMealPlanCard();
+}
+
+async function generateMealPlan(){
+  const body=document.getElementById('mp-body');
+  body.innerHTML=`<div style="text-align:center;padding:14px"><span class="ai-typing-dots"><span></span><span></span><span></span></span><p style="font-size:12.5px;color:var(--muted);margin-top:8px">Building your plan — takes about 20 seconds…</p></div>`;
+  const p=mealPrefs;
+  const weak=lastAIAnalytics&&lastAIAnalytics.total>0?`Their weakest tracked habit lately is ${lastAIAnalytics.weakest.label} (${lastAIAnalytics.weakest.rate}% of target) — lean the plan toward helping that where it makes sense.`:'';
+  const avoidLine=p.avoid
+    ?`ABSOLUTE RULE — NO EXCEPTIONS: none of these ingredients may appear anywhere in any meal or the shopping list, in any form or derivative: ${p.avoid}. If a classic version of a dish uses one, substitute it and say so in the notes.`
+    :'No allergies or avoid-list given.';
+  const prompt=`You are the Lean Comp Nutrition coach creating a weekly dinner plan.
+${avoidLine}
+Client setup: cooking for ${p.household} ${p.household==1?'person':'people'}, ${p.dinners} dinners this week, max ${p.time} minutes per meal, eating style: ${p.style}. Variety preference: ${p.variety}. ${weak}
+Simple everyday ingredients available in Irish supermarkets. Realistic portions.
+Respond with ONLY raw JSON, no markdown fences, in exactly this shape:
+{"days":[{"day":"Monday","meal":"name","time_mins":30,"notes":"one short line: key step or why it fits"}],"shopping_list":[{"category":"Meat & Fish","items":["600g chicken breast"]}]}
+Quantities on the shopping list sized for ${p.household} across all ${p.dinners} meals, grouped into sensible categories. No shop names, brands, or prices.`;
+  try{
+    const res=await fetch(WORKER_URL,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({clientId:currentEmail,mode:'mealplan',messages:[{role:'user',content:prompt}]})});
+    const data=await res.json();
+    if(!res.ok){
+      body.innerHTML=`<div class="mp-locked">${data.message||'Could not build a plan right now — try again shortly.'}</div>
+        <button class="ai-end-btn" onclick="renderMealPlanCard()">Back</button>`;
+      return;
+    }
+    const parsed=JSON.parse((data.text||'').replace(/```json|```/g,'').trim());
+    lastMealPlan=parsed;
+    localStorage.setItem('lcn_last_mealplan_'+currentEmail,JSON.stringify(parsed));
+    renderMealPlan(parsed);
+  }catch(e){
+    body.innerHTML=`<div class="mp-locked">That one didn't come out right — hit generate again.</div>
+      <button class="ai-end-btn" onclick="renderMealPlanCard()">Back</button>`;
+  }
+}
+
+function renderMealPlan(plan){
+  const body=document.getElementById('mp-body');
+  const days=(plan.days||[]).map(d=>`
+    <div class="mp-day"><b>${d.day}</b> <span class="mp-meta">· ${d.meal} · ~${d.time_mins} min</span>
+      ${d.notes?`<p>${d.notes}</p>`:''}</div>`).join('');
+  const shop=(plan.shopping_list||[]).map(c=>`
+    <div class="mp-shop-cat">${c.category}</div>
+    <div class="mp-shop-items">${(c.items||[]).join('<br>')}</div>`).join('');
+  body.innerHTML=`${days}
+    <div class="mp-title" style="margin-top:14px">🛒 Shopping list</div>${shop}
+    <div class="mp-safety">⚠️ Always double-check ingredient labels yourself before buying or cooking — especially for allergies. AI-generated plans are a starting point, not a guarantee.</div>
+    <button class="ai-end-btn" onclick="generateMealPlan()" style="margin-top:12px">Regenerate</button>
+    <button class="ai-end-btn" onclick="renderMealPrefsForm()" style="margin-top:8px">Update my preferences</button>`;
+}
+
 // ── AI COACH ──
 // Reuses this file's own scoreWater/scoreSleep/scoreSteps/scoreFV/calcLogScore
 // and the currentUser/allLogs already loaded by the Log Today / My History tabs,
@@ -1068,6 +1222,7 @@ function updateProUI(){
   document.getElementById('ai-compare-toggle').style.display = (!isPro && STRIPE_PAYMENT_LINK)?'inline-block':'none';
   document.getElementById('ai-manage-sub-link').style.display = (isPro && STRIPE_CUSTOMER_PORTAL_LINK)?'inline-flex':'none';
   renderTrends(isPro);
+  loadMealPrefs().then(renderMealPlanCard);
 }
 function twMetric(label,now,prev,suffix){
   const delta=now-prev;
