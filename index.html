@@ -160,6 +160,9 @@
   .mp-shop-items{font-size:13.5px;line-height:1.7}
   .mp-safety{background:#fff8e6;border:1px solid var(--orange);border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.5;margin-top:12px;color:var(--text)}
   .mp-locked{text-align:center;padding:18px;color:var(--muted);font-size:13.5px;line-height:1.6}
+  .mp-btn{width:100%;background:var(--green);color:#fff;border:none;border-radius:10px;font-family:"Nunito",sans-serif;font-size:16px;font-weight:800;padding:13px;cursor:pointer;transition:background .2s,transform .1s;margin-top:14px}
+  .mp-btn:hover{background:var(--green-dark)}
+  .mp-btn:active{transform:scale(.96)}
 
   /* Tap feedback — every real <button> gets a slight press-down on tap, since
      :hover barely fires on touchscreens and users otherwise get no signal
@@ -982,7 +985,7 @@ function renderMealPlanCard(){
   if(saved && !lastMealPlan){ try{ lastMealPlan=JSON.parse(saved); }catch(e){} }
   if(lastMealPlan){ renderMealPlan(lastMealPlan); return; }
   if(!mealPrefs){ renderMealPrefsForm(); return; }
-  body.innerHTML=`<button onclick="generateMealPlan()" style="width:100%;margin-top:0">Generate this week's plan</button>
+  body.innerHTML=`<button class="mp-btn" onclick="generateMealPlan()" style="margin-top:0">Generate this week's plan</button>
     <button class="ai-end-btn" onclick="renderMealPrefsForm()" style="margin-top:8px">Update my preferences</button>`;
 }
 
@@ -992,26 +995,35 @@ function renderMealPrefsForm(){
     <div class="mp-form">
       <label>How many people are you cooking for?</label>
       <select id="mpf-household">${[1,2,3,4,5,6].map(n=>`<option ${p.household==n?'selected':''}>${n}</option>`).join('')}</select>
-      <label>Dinners to plan this week</label>
+      <label>Which meals should the plan cover?</label>
+      <select id="mpf-scope">${['Dinners only','Breakfast, lunch & dinner','All meals + snacks'].map(s=>`<option ${p.scope===s?'selected':''}>${s}</option>`).join('')}</select>
+      <label>Days to plan this week</label>
       <select id="mpf-dinners">${[3,5,7].map(n=>`<option ${p.dinners==n?'selected':''}>${n}</option>`).join('')}</select>
       <label>Max cooking time per meal</label>
       <select id="mpf-time">${[15,30,45,60].map(n=>`<option ${p.time==n?'selected':''} value="${n}">${n} minutes</option>`).join('')}</select>
       <label>Eating style</label>
       <select id="mpf-style">${['Balanced','High protein','Lower carb','Vegetarian','Vegan'].map(s=>`<option ${p.style===s?'selected':''}>${s}</option>`).join('')}</select>
+      <label>Daily calorie target — optional, leave blank to skip</label>
+      <input type="text" id="mpf-cals" inputmode="numeric" placeholder="e.g. 2200" value="${p.cals||''}">
+      <label>Daily protein target (g) — optional</label>
+      <input type="text" id="mpf-protein" inputmode="numeric" placeholder="e.g. 150" value="${p.protein||''}">
       <label>Allergies &amp; ingredients to avoid — be thorough, this is treated as a hard rule</label>
       <input type="text" id="mpf-avoid" placeholder="e.g. peanuts, shellfish, mushrooms" value="${(p.avoid||'').replace(/"/g,'&quot;')}">
       <label>Variety</label>
       <select id="mpf-variety">${['Keep it simple — repeats are fine','Mix it up — different every night'].map(s=>`<option ${p.variety===s?'selected':''}>${s}</option>`).join('')}</select>
-      <button onclick="saveMealPrefs()" style="width:100%">Save preferences</button>
+      <button class="mp-btn" onclick="saveMealPrefs()">Save preferences</button>
     </div>`;
 }
 
 async function saveMealPrefs(){
   mealPrefs={
     household:document.getElementById('mpf-household').value,
+    scope:document.getElementById('mpf-scope').value,
     dinners:document.getElementById('mpf-dinners').value,
     time:document.getElementById('mpf-time').value,
     style:document.getElementById('mpf-style').value,
+    cals:(document.getElementById('mpf-cals').value.replace(/[^0-9]/g,'')||''),
+    protein:(document.getElementById('mpf-protein').value.replace(/[^0-9]/g,'')||''),
     avoid:document.getElementById('mpf-avoid').value.trim(),
     variety:document.getElementById('mpf-variety').value,
   };
@@ -1027,19 +1039,26 @@ async function saveMealPrefs(){
 
 async function generateMealPlan(){
   const body=document.getElementById('mp-body');
-  body.innerHTML=`<div style="text-align:center;padding:14px"><span class="ai-typing-dots"><span></span><span></span><span></span></span><p style="font-size:12.5px;color:var(--muted);margin-top:8px">Building your plan — takes about 20 seconds…</p></div>`;
+  body.innerHTML=`<div style="text-align:center;padding:14px"><span class="ai-typing-dots"><span></span><span></span><span></span></span><p style="font-size:12.5px;color:var(--muted);margin-top:8px">Building your full plan — can take up to a minute…</p></div>`;
   const p=mealPrefs;
   const weak=lastAIAnalytics&&lastAIAnalytics.total>0?`Their weakest tracked habit lately is ${lastAIAnalytics.weakest.label} (${lastAIAnalytics.weakest.rate}% of target) — lean the plan toward helping that where it makes sense.`:'';
   const avoidLine=p.avoid
     ?`ABSOLUTE RULE — NO EXCEPTIONS: none of these ingredients may appear anywhere in any meal or the shopping list, in any form or derivative: ${p.avoid}. If a classic version of a dish uses one, substitute it and say so in the notes.`
     :'No allergies or avoid-list given.';
-  const prompt=`You are the Lean Comp Nutrition coach creating a weekly dinner plan.
+  const scope=p.scope||'Dinners only';
+  const mealTypes=scope==='All meals + snacks'?'Breakfast, Lunch, Dinner and one Snack'
+    :scope==='Breakfast, lunch & dinner'?'Breakfast, Lunch and Dinner'
+    :'Dinner only';
+  const targets=(p.cals||p.protein)
+    ?`Daily targets: ${p.cals?`approximately ${p.cals} kcal`:''}${p.cals&&p.protein?' and ':''}${p.protein?`${p.protein}g protein`:''} per person per day, spread sensibly across the day's meals. Get day totals close to target without being obsessive about exact numbers.`
+    :'No calorie or protein targets set — just sensible, satisfying portions.';
+  const prompt=`You are the Lean Comp Nutrition coach creating a weekly meal plan.
 ${avoidLine}
-Client setup: cooking for ${p.household} ${p.household==1?'person':'people'}, ${p.dinners} dinners this week, max ${p.time} minutes per meal, eating style: ${p.style}. Variety preference: ${p.variety}. ${weak}
-Simple everyday ingredients available in Irish supermarkets. Realistic portions.
+Client setup: cooking for ${p.household} ${p.household==1?'person':'people'}, ${p.dinners} days this week, covering ${mealTypes} each day. Max ${p.time} minutes active cooking per meal. Eating style: ${p.style}. Variety preference: ${p.variety}. ${targets} ${weak}
+Simple everyday ingredients available in Irish supermarkets. Realistic portions. Breakfasts and lunches should be quick/prep-ahead friendly; snacks simple.
 Respond with ONLY raw JSON, no markdown fences, in exactly this shape:
-{"days":[{"day":"Monday","meal":"name","time_mins":30,"notes":"one short line: key step or why it fits"}],"shopping_list":[{"category":"Meat & Fish","items":["600g chicken breast"]}]}
-Quantities on the shopping list sized for ${p.household} across all ${p.dinners} meals, grouped into sensible categories. No shop names, brands, or prices.`;
+{"days":[{"day":"Monday","meals":[{"type":"Breakfast","meal":"name","time_mins":10,"calories":420,"protein_g":28,"instructions":["step one","step two"],"notes":"optional one-liner"}],"day_totals":{"calories":2150,"protein_g":148}}],"shopping_list":[{"category":"Meat & Fish","items":["600g chicken breast"]}]}
+Rules: calories and protein_g are PER PERSON estimates. instructions is 2-5 short numbered-style steps per meal. Include day_totals for every day. Shopping list quantities sized for ${p.household} across the whole week, grouped into sensible categories. No shop names, brands, or prices.`;
   try{
     const res=await fetch(WORKER_URL,{
       method:'POST',headers:{'Content-Type':'application/json'},
@@ -1062,17 +1081,63 @@ Quantities on the shopping list sized for ${p.household} across all ${p.dinners}
 
 function renderMealPlan(plan){
   const body=document.getElementById('mp-body');
-  const days=(plan.days||[]).map(d=>`
-    <div class="mp-day"><b>${d.day}</b> <span class="mp-meta">· ${d.meal} · ~${d.time_mins} min</span>
-      ${d.notes?`<p>${d.notes}</p>`:''}</div>`).join('');
+  const days=(plan.days||[]).map(d=>{
+    // New shape: d.meals[]. Old saved plans (dinner-only): d.meal — still render.
+    if(Array.isArray(d.meals)){
+      const meals=d.meals.map(m=>`
+        <div style="margin-bottom:6px">
+          <b style="font-size:13.5px">${m.type?m.type+': ':''}${m.meal}</b>
+          <span class="mp-meta">· ~${m.time_mins} min${m.calories?` · ~${m.calories} kcal`:''}${m.protein_g?` · ${m.protein_g}g protein`:''}</span>
+          ${m.notes?`<p>${m.notes}</p>`:''}
+          ${Array.isArray(m.instructions)&&m.instructions.length?`<details style="margin-top:3px"><summary style="font-size:12px;font-weight:700;color:var(--green-dark);cursor:pointer">Cooking steps</summary><ol style="font-size:12.5px;line-height:1.6;margin:4px 0 0 18px">${m.instructions.map(s=>`<li>${s}</li>`).join('')}</ol></details>`:''}
+        </div>`).join('');
+      const totals=d.day_totals?`<div class="mp-meta" style="margin-top:4px;font-weight:700">Day total: ~${d.day_totals.calories||'—'} kcal · ${d.day_totals.protein_g||'—'}g protein${(mealPrefs&&(mealPrefs.cals||mealPrefs.protein))?` (target: ${mealPrefs.cals?mealPrefs.cals+' kcal':''}${mealPrefs.cals&&mealPrefs.protein?' / ':''}${mealPrefs.protein?mealPrefs.protein+'g':''})`:''}</div>`:'';
+      return `<div class="mp-day"><b>${d.day}</b>${totals}<div style="margin-top:6px">${meals}</div></div>`;
+    }
+    return `<div class="mp-day"><b>${d.day}</b> <span class="mp-meta">· ${d.meal} · ~${d.time_mins} min</span>${d.notes?`<p>${d.notes}</p>`:''}</div>`;
+  }).join('');
   const shop=(plan.shopping_list||[]).map(c=>`
     <div class="mp-shop-cat">${c.category}</div>
     <div class="mp-shop-items">${(c.items||[]).join('<br>')}</div>`).join('');
   body.innerHTML=`${days}
     <div class="mp-title" style="margin-top:14px">🛒 Shopping list</div>${shop}
-    <div class="mp-safety">⚠️ Always double-check ingredient labels yourself before buying or cooking — especially for allergies. AI-generated plans are a starting point, not a guarantee.</div>
+    <button class="mp-btn" onclick="printShoppingList()">🖨️ Print / save shopping list as PDF</button>
+    <div class="mp-safety">⚠️ Always double-check ingredient labels yourself before buying or cooking — especially for allergies. Calorie and protein figures are estimates, not measurements. AI-generated plans are a starting point, not a guarantee.</div>
     <button class="ai-end-btn" onclick="generateMealPlan()" style="margin-top:12px">Regenerate</button>
     <button class="ai-end-btn" onclick="renderMealPrefsForm()" style="margin-top:8px">Update my preferences</button>`;
+}
+
+function printShoppingList(){
+  if(!lastMealPlan||!lastMealPlan.shopping_list) return;
+  const logoSrc=(document.querySelector('img')||{}).src||'';
+  const cats=lastMealPlan.shopping_list.map(c=>`
+    <h3>${c.category}</h3>
+    <ul>${(c.items||[]).map(i=>`<li>${i}</li>`).join('')}</ul>`).join('');
+  const w=window.open('','_blank');
+  if(!w){ alert('Allow pop-ups for this site to save the PDF.'); return; }
+  w.document.write(`<!DOCTYPE html><html><head><title>Shopping List — Lean Comp Nutrition</title>
+    <style>
+      body{font-family:-apple-system,'Segoe UI',sans-serif;color:#1a2e0a;max-width:640px;margin:0 auto;padding:28px 24px}
+      .hd{display:flex;align-items:center;gap:14px;border-bottom:3px solid #5a9e2f;padding-bottom:14px;margin-bottom:6px}
+      .hd img{height:56px}
+      .hd .t1{font-size:20px;font-weight:800;color:#3d7a1a;letter-spacing:.5px}
+      .hd .t1 span{color:#cc2200}
+      .hd .t2{font-size:12px;color:#7a9060;font-weight:600}
+      h2{font-size:15px;color:#3d7a1a;text-transform:uppercase;letter-spacing:1px;margin:18px 0 4px}
+      h3{font-size:13px;color:#3d7a1a;text-transform:uppercase;letter-spacing:.5px;margin:16px 0 4px}
+      ul{margin:0;padding-left:2px;list-style:none}
+      li{font-size:13.5px;line-height:1.9;border-bottom:1px dotted #ddeece;padding-left:26px;position:relative}
+      li::before{content:"";position:absolute;left:2px;top:8px;width:12px;height:12px;border:1.8px solid #5a9e2f;border-radius:3px}
+      .ft{margin-top:26px;font-size:11px;color:#7a9060;border-top:1px solid #ddeece;padding-top:10px}
+      @media print{body{padding:0}}
+    </style></head><body>
+    <div class="hd">${logoSrc?`<img src="${logoSrc}">`:''}<div><div class="t1">LEAN COMP <span>NUTRITION</span></div><div class="t2">Weekly shopping list · ${new Date().toLocaleDateString('en-IE')}</div></div></div>
+    <h2>This week's shop</h2>
+    ${cats}
+    <div class="ft">Generated by your Lean Comp Nutrition AI coach. Always check ingredient labels yourself, especially for allergies.</div>
+    <scr`+`ipt>window.onload=function(){setTimeout(function(){window.print();},300);};</scr`+`ipt>
+    </body></html>`);
+  w.document.close();
 }
 
 // ── AI COACH ──
