@@ -1081,7 +1081,7 @@ Rules: calories and protein_g are PER PERSON estimates. instructions is 2-5 shor
     localStorage.setItem('lcn_last_mealplan_'+currentEmail,JSON.stringify(parsed));
     renderMealPlan(parsed);
   }catch(e){
-    showMealPlanError("That one didn't come out right — hit generate again.");
+    showMealPlanError("That one didn't come out right — hit generate again, it won't count against today's plans.");
   }
 }
 
