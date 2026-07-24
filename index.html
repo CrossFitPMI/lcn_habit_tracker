@@ -132,6 +132,9 @@
   .pin-key:active{transform:scale(.95);background:var(--green-light)}
   .pin-key.del{font-size:24px;color:var(--muted)}
   .pin-error{font-size:13px;color:var(--red);margin-top:16px;min-height:18px;font-weight:600}
+  .prefill-note{background:#fff8e6;border:1px solid var(--orange);border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12.5px;line-height:1.5;color:var(--text)}
+  .field select.prefilled,.field textarea.prefilled{border-style:dashed;color:var(--muted);font-style:italic}
+  .toggle-item.prefilled{opacity:.6;border-style:dashed}
   @media(max-width:480px){.habit-grid{grid-template-columns:1fr}.hero{padding:32px 16px 28px}}
   @media(max-width:560px){.tab{font-size:10.5px;padding:10px 3px;letter-spacing:.2px}}
 
@@ -143,6 +146,8 @@
   .lb-name .lb-you{font-size:11px;font-weight:800;color:var(--green-dark);background:var(--green-light);border-radius:8px;padding:2px 8px;margin-left:8px;vertical-align:1px}
   .lb-streak{font-family:"Nunito",sans-serif;font-size:16px;font-weight:800;color:var(--green-dark);white-space:nowrap}
   .lb-hidden-note{background:var(--green-light);border-radius:12px;padding:12px 16px;margin-bottom:8px;font-size:13px;color:var(--green-dark);font-weight:600}
+  .lb-personal{background:var(--green-light);border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:13.5px;color:var(--green-dark);line-height:1.6}
+  .lb-board-title{font-family:"Nunito",sans-serif;font-size:13px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--green-dark);margin-bottom:8px}
   .lb-toggle-row{display:flex;align-items:center;gap:10px;margin-top:16px;padding:14px 16px;background:var(--card);border:1px solid var(--border);border-radius:12px;font-size:13px;color:var(--muted)}
   .lb-toggle-row input{width:18px;height:18px;accent-color:var(--green);flex-shrink:0}
 
@@ -287,6 +292,8 @@
     </div>
 
     <div id="tab-log">
+
+      <div class="prefill-note" id="prefill-note" style="display:none">📋 Showing your last log's values as a starting point — <b>adjust anything that's changed</b> before saving. Dashed fields haven't been confirmed yet.</div>
 
       <div class="progress-wrap">
         <div class="progress-header">
@@ -598,6 +605,51 @@ function updateProgress() {
   document.getElementById('progress-fill').style.background = scoreColour(score);
 }
 
+/* Pre-fill the form from the client's most recent log so a stable day is a
+   few confirmations rather than a blank form. Deliberately NOT a one-tap
+   "same as yesterday" — every value stays visibly unconfirmed (dashed,
+   muted) until the client actually touches that field, so nothing gets
+   recorded that they didn't look at. Notes always start blank. */
+function prefillFromLastLog(){
+  const mine=allLogs.filter(l=>l['Client Email']?l['Client Email']===currentEmail:l['Client Name']===currentUser)
+    .map(normalizeAILog)
+    .sort((a,b)=>String(b['Date']).localeCompare(String(a['Date'])));
+  if(!mine.length) return;
+  const last=mine[0];
+  if(String(last['Date']).slice(0,10)===today()) return; // already logged today
+
+  const setSel=(id,val)=>{
+    const el=document.getElementById(id);
+    if(!el||val===''||val===undefined||val===null) return;
+    const target=String(val);
+    const match=[...el.options].find(o=>o.value===target||o.text===target||parseFloat(o.value)===parseFloat(target));
+    if(!match) return;
+    el.value=match.value;
+    el.classList.add('prefilled');
+    el.addEventListener('change',()=>el.classList.remove('prefilled'),{once:true});
+  };
+  setSel('f-water',last['Water (L)']);
+  setSel('f-sleep',last['Sleep (hrs)']);
+  setSel('f-steps',last['Steps']);
+  setSel('f-fruitsVeg',last['Fruit & Veg Portions']);
+
+  const setTog=(key,val)=>{
+    if(val!=='Yes'&&val!=='No') return;
+    habits[key]=(val==='Yes');
+    const el=document.getElementById('toggle-'+key);
+    if(!el) return;
+    el.classList.toggle('active',habits[key]);
+    el.classList.add('prefilled');
+    el.addEventListener('click',()=>el.classList.remove('prefilled'),{once:true});
+  };
+  setTog('protein',last['Protein Target Hit']);
+  setTog('alcohol',last['No Alcohol']);
+  setTog('exercise',last['Exercise Completed']);
+
+  document.getElementById('prefill-note').style.display='block';
+  updateProgress();
+}
+
 // ── LOGIN ──
 function doLogin() {
   const name = document.getElementById('login-name').value.trim();
@@ -624,7 +676,7 @@ function showApp() {
   document.getElementById('nav-user').style.display='flex';
   document.getElementById('nav-user-name').textContent=currentUser;
   document.getElementById('f-date').value=today();
-  loadLogs();
+  loadLogs().then(prefillFromLastLog);
 }
 
 // ── TABS ──
@@ -891,6 +943,21 @@ function calcStreakFromLogs(logs){
   return streak;
 }
 
+/* Longest run of consecutive logged days ever — a permanent record that a
+   broken streak can't erase. Returns the length and the date it ended. */
+function calcBestStreak(logs){
+  const dates=[...new Set(logs.map(l=>String(l['Date']).slice(0,10)))].filter(Boolean).sort();
+  if(!dates.length) return {len:0,ended:null};
+  let best=1,run=1,bestEnd=dates[0];
+  for(let i=1;i<dates.length;i++){
+    const prev=new Date(dates[i-1]), cur=new Date(dates[i]);
+    const gap=Math.round((cur-prev)/86400000);
+    if(gap===1){ run++; } else { run=1; }
+    if(run>best){ best=run; bestEnd=dates[i]; }
+  }
+  return {len:best,ended:bestEnd};
+}
+
 async function renderStreaks(){
   await loadLogs(); // fresh data so today's logs count
   try{
@@ -914,30 +981,49 @@ async function renderStreaks(){
   });
 
   const entries=Object.values(groups)
-    .map(g=>({...g,streak:calcStreakFromLogs(g.logs),
+    .map(g=>({...g,streak:calcStreakFromLogs(g.logs),best:calcBestStreak(g.logs),
       hidden:g.email?lbPrefs.some(p=>p.email===g.email&&p.hidden):false,
-      isMe:g.email?g.email===currentEmail:g.name===currentUser}))
-    .filter(g=>g.streak>0);
+      isMe:g.email?g.email===currentEmail:g.name===currentUser}));
 
-  const visible=entries.filter(g=>!g.hidden).sort((a,b)=>b.streak-a.streak).slice(0,10);
+  const active=entries.filter(g=>g.streak>0);
+  const visible=active.filter(g=>!g.hidden).sort((a,b)=>b.streak-a.streak).slice(0,10);
+  const allTime=entries.filter(g=>!g.hidden&&g.best.len>0).sort((a,b)=>b.best.len-a.best.len).slice(0,10);
   const me=entries.find(g=>g.isMe);
 
   const list=document.getElementById('lb-list');
+  const medals=['🥇','🥈','🥉'];
   let html='';
 
-  if(me&&me.hidden){
-    html+=`<div class="lb-hidden-note">You're hidden from the board. Your streak: ${me.streak} day${me.streak===1?'':'s'} 🔥 — only you and your coach can see it.</div>`;
+  // Personal line first — a broken streak should never read as a bare zero.
+  if(me){
+    html+=`<div class="lb-personal">
+      <div><b>Your streak:</b> ${me.streak} day${me.streak===1?'':'s'} 🔥</div>
+      ${me.best.len>0?`<div style="margin-top:2px">Your all-time best: <b>${me.best.len} day${me.best.len===1?'':'s'}</b>${me.streak>0&&me.streak>=me.best.len?' — that\'s a personal record right now! 🎉':(me.streak===0?' — still yours. Log today and start the next one.':'')}</div>`:''}
+      ${me.hidden?`<div style="margin-top:4px;font-size:12px">You're hidden from the boards below — only you and your coach see this.</div>`:''}
+    </div>`;
   }
 
+  html+=`<div class="lb-board-title">🔥 On a streak right now</div>`;
   if(!visible.length){
     html+=`<div class="empty-state"><div class="icon">🔥</div>No active streaks yet — log today and start the board off!</div>`;
   }else{
-    const medals=['🥇','🥈','🥉'];
     html+=visible.map((g,i)=>`
       <div class="lb-row${g.isMe?' me':''}">
         <div class="lb-rank">${medals[i]||(i+1)}</div>
         <div class="lb-name">${g.name}${g.isMe?'<span class="lb-you">YOU</span>':''}</div>
         <div class="lb-streak">🔥 ${g.streak} day${g.streak===1?'':'s'}</div>
+      </div>`).join('');
+  }
+
+  if(allTime.length){
+    html+=`<div class="lb-board-title" style="margin-top:20px">🏅 Hall of fame — all-time best</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Records stay here for good, even after a streak ends. Something to chase.</p>`;
+    html+=allTime.map((g,i)=>`
+      <div class="lb-row${g.isMe?' me':''}">
+        <div class="lb-rank">${medals[i]||(i+1)}</div>
+        <div class="lb-name">${g.name}${g.isMe?'<span class="lb-you">YOU</span>':''}
+          ${g.best.ended?`<div style="font-size:11px;color:var(--muted);font-weight:600">set ${formatDate(g.best.ended)}</div>`:''}</div>
+        <div class="lb-streak">🏅 ${g.best.len} day${g.best.len===1?'':'s'}</div>
       </div>`).join('');
   }
   list.innerHTML=html;
