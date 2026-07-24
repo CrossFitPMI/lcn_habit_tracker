@@ -1143,16 +1143,26 @@ async function generateMealPlan(){
   const mealTypes=scope==='All meals + snacks'?'Breakfast, Lunch, Dinner and one Snack'
     :scope==='Breakfast, lunch & dinner'?'Breakfast, Lunch and Dinner'
     :'Dinner only';
-  const targets=(p.cals||p.protein)
-    ?`Daily targets: ${p.cals?`approximately ${p.cals} kcal`:''}${p.cals&&p.protein?' and ':''}${p.protein?`${p.protein}g protein`:''} per person per day, spread sensibly across the day's meals. Get day totals close to target without being obsessive about exact numbers.`
-    :'No calorie or protein targets set — just sensible, satisfying portions.';
+  const wholeDay = scope!=='Dinners only';
+  let targets='No calorie or protein targets set — just sensible, satisfying portions.';
+  if(p.cals||p.protein){
+    const t=`${p.cals?`${p.cals} kcal`:''}${p.cals&&p.protein?' and ':''}${p.protein?`${p.protein}g protein`:''}`;
+    targets = wholeDay
+      ? `Daily targets: about ${t} per person per day, spread sensibly across the day's meals. Get day totals close to target without being obsessive.`
+      : `Their FULL DAY target is about ${t}, but you are only planning dinner — so each dinner should be a NORMAL SINGLE DINNER PORTION contributing roughly a third of that. Never load a whole day's calories or protein into one meal. day_totals here means the dinner's own figures only.`;
+  }
   const prompt=`You are the Lean Comp Nutrition coach creating a weekly meal plan.
 ${avoidLine}
 Client setup: cooking for ${p.household} ${p.household==1?'person':'people'}, ${p.dinners} days this week, covering ${mealTypes} each day. Max ${p.time} minutes active cooking per meal. Eating style: ${p.style}. Variety preference: ${p.variety}. ${targets} ${weak}
 Simple everyday ingredients available in Irish supermarkets. Realistic portions. Breakfasts and lunches should be quick/prep-ahead friendly; snacks simple.
 Respond with ONLY raw JSON, no markdown fences, in exactly this shape:
 {"days":[{"day":"Monday","meals":[{"type":"Breakfast","meal":"name","time_mins":10,"calories":420,"protein_g":28,"instructions":["step one","step two"],"notes":"optional one-liner"}],"day_totals":{"calories":2150,"protein_g":148}}],"shopping_list":[{"category":"Meat & Fish","items":["600g chicken breast"]}]}
-Rules: calories and protein_g are PER PERSON estimates. instructions is 2-5 short numbered-style steps per meal. Include day_totals for every day. Shopping list quantities sized for ${p.household} across the whole week, grouped into sensible categories. No shop names, brands, or prices.`;
+Keep it COMPACT so the whole plan fits in one response:
+- calories and protein_g are PER PERSON estimates.
+- instructions: only for meals that need real cooking, max 4 SHORT steps. For assembly-only items (yogurt bowls, sandwiches, snacks) omit instructions entirely.
+- notes: only where genuinely useful, otherwise omit. Max 10 words.
+- Include day_totals for every day.
+- Shopping list quantities sized for ${p.household} across the whole week, grouped into sensible categories. No shop names, brands, or prices.`;
   try{
     const res=await fetch(WORKER_URL,{
       method:'POST',headers:{'Content-Type':'application/json'},
@@ -1199,7 +1209,9 @@ function renderMealPlan(plan){
           ${m.notes?`<p>${m.notes}</p>`:''}
           ${Array.isArray(m.instructions)&&m.instructions.length?`<details style="margin-top:3px"><summary style="font-size:12px;font-weight:700;color:var(--green-dark);cursor:pointer">Cooking steps</summary><ol style="font-size:12.5px;line-height:1.6;margin:4px 0 0 18px">${m.instructions.map(s=>`<li>${s}</li>`).join('')}</ol></details>`:''}
         </div>`).join('');
-      const totals=d.day_totals?`<div class="mp-meta" style="margin-top:4px;font-weight:700">Day total: ~${d.day_totals.calories||'—'} kcal · ${d.day_totals.protein_g||'—'}g protein${(mealPrefs&&(mealPrefs.cals||mealPrefs.protein))?` (target: ${mealPrefs.cals?mealPrefs.cals+' kcal':''}${mealPrefs.cals&&mealPrefs.protein?' / ':''}${mealPrefs.protein?mealPrefs.protein+'g':''})`:''}</div>`:'';
+      const fullDay = mealPrefs && mealPrefs.scope && mealPrefs.scope!=='Dinners only';
+      const showTarget = fullDay && mealPrefs && (mealPrefs.cals||mealPrefs.protein);
+      const totals=d.day_totals?`<div class="mp-meta" style="margin-top:4px;font-weight:700">${fullDay?'Day total':'Dinner'}: ~${d.day_totals.calories||'—'} kcal · ${d.day_totals.protein_g||'—'}g protein${showTarget?` (daily target: ${mealPrefs.cals?mealPrefs.cals+' kcal':''}${mealPrefs.cals&&mealPrefs.protein?' / ':''}${mealPrefs.protein?mealPrefs.protein+'g':''})`:''}</div>`:'';
       return `<div class="mp-day"><b>${d.day}</b>${totals}<div style="margin-top:6px">${meals}</div></div>`;
     }
     return `<div class="mp-day"><b>${d.day}</b> <span class="mp-meta">· ${d.meal} · ~${d.time_mins} min</span>${d.notes?`<p>${d.notes}</p>`:''}</div>`;
