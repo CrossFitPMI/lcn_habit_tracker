@@ -236,6 +236,16 @@
   .tw-legend .lg-this::before{background:var(--green)}
   .tw-legend .lg-last::before{background:#b9cfa5}
 </style>
+ <link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#005e38">
+
+<link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png">
+
+<!-- iOS home-screen support (Safari ignores the manifest for some of this) -->
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="LCN Coach">
 </head>
 <body>
 
@@ -1591,5 +1601,52 @@ async function endAISession(){
     <div class="pin-error" id="pin-error"></div>
   </div>
 </div>
+  <script>
+  // Register the service worker (enables offline + installability)
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./service-worker.js')
+        .catch((err) => console.warn('SW registration failed:', err));
+    });
+  }
+
+  // Capture the Android/desktop Chrome install prompt so we can trigger it
+  // from our own button instead of waiting for the browser's default UI.
+  let deferredInstallPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    const btn = document.getElementById('installAppBtn');
+    if (btn) btn.style.display = 'inline-block';
+  });
+
+  function triggerInstall() {
+    const btn = document.getElementById('installAppBtn');
+    if (deferredInstallPrompt) {
+      deferredInstallPrompt.prompt();
+      deferredInstallPrompt.userChoice.finally(() => {
+        deferredInstallPrompt = null;
+        if (btn) btn.style.display = 'none';
+      });
+      return;
+    }
+    // iOS Safari (and any browser that never fired beforeinstallprompt)
+    // has no programmatic install — show them the manual steps instead.
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    alert(
+      isIOS
+        ? 'To install: tap the Share icon, then "Add to Home Screen".'
+        : 'To install: open your browser menu and choose "Install app" or "Add to Home screen".'
+    );
+  }
+
+  // Hide the install button once the app is already running standalone
+  window.addEventListener('DOMContentLoaded', () => {
+    const standalone = window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone === true;
+    const btn = document.getElementById('installAppBtn');
+    if (standalone && btn) btn.style.display = 'none';
+  });
+</script>
 </body>
 </html>
