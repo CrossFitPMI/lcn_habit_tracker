@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#005e38">
+<meta name="theme-color" content="#3d7a1a">
 <title>Lean Comp Nutrition · Daily Habit Tracker</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=DM+Sans:wght@400;500;600&display=swap');
@@ -35,7 +35,7 @@
   .streak-inner{max-width:680px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr)}
   .streak-stat{padding:16px 12px;text-align:center;border-right:1px solid var(--border)}
   .streak-stat:last-child{border-right:none}
-  .streak-val{font-family:"Nunito",sans-serif;font-size:28px;font-weight:900;color:var(---dark);line-height:1}
+  .streak-val{font-family:"Nunito",sans-serif;font-size:28px;font-weight:900;color:var(--green-dark);line-height:1}
   .streak-label{font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-top:4px}
 
   .main{max-width:680px;margin:0 auto;padding:28px 16px 0}
@@ -237,7 +237,7 @@
   .tw-legend .lg-last::before{background:#b9cfa5}
 </style>
  <link rel="manifest" href="./manifest.json">
-<meta name="theme-color" content="#005e38">
+<meta name="theme-color" content="#3d7a1a">
 
 <link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png">
 
@@ -1601,6 +1601,34 @@ async function endAISession(){
     <div class="pin-error" id="pin-error"></div>
   </div>
 </div>
+  <!-- PWA install button: stays hidden until install is actually available -->
+<button id="installAppBtn" onclick="triggerInstall()" style="display:none;">
+  ⬇ Install App
+</button>
+
+<style>
+  #installAppBtn {
+    position: fixed;
+    left: 0;
+    right: 0;
+    margin: 0 auto;
+    width: max-content;
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    z-index: 150;
+    background: var(--green);
+    color: #fff;
+    border: none;
+    border-radius: 999px;
+    padding: 12px 24px;
+    font-family: "Nunito", sans-serif;
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: .3px;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(61, 122, 26, .35);
+  }
+  #installAppBtn:hover { background: var(--green-dark); }
+</style>
   <script>
   // Register the service worker (enables offline + installability)
   if ('serviceWorker' in navigator) {
@@ -1640,12 +1668,24 @@ async function endAISession(){
     );
   }
 
-  // Hide the install button once the app is already running standalone
   window.addEventListener('DOMContentLoaded', () => {
     const standalone = window.matchMedia('(display-mode: standalone)').matches
       || window.navigator.standalone === true;
     const btn = document.getElementById('installAppBtn');
-    if (standalone && btn) btn.style.display = 'none';
+    if (!btn) return;
+
+    // Already installed and running from the home screen — no button needed.
+    if (standalone) {
+      btn.style.display = 'none';
+      return;
+    }
+
+    // iOS Safari never fires 'beforeinstallprompt', so the button would stay
+    // hidden forever on iPhone. Reveal it here instead — tapping it shows the
+    // Add to Home Screen instructions from triggerInstall().
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    if (isIOS) btn.style.display = 'inline-block';
+  });
   });
 </script>
 </body>
