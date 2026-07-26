@@ -787,13 +787,38 @@ function normalizeDateStr(v){
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
 
-async function loadLogs(){
-  try{
-    const res=await fetch(SCRIPT_URL+'?action=getLogs');
-    const data=await res.json();
-    allLogs=(Array.isArray(data)?data:[]).map(l=>({...l,'Date':normalizeDateStr(l['Date'])}));
+let logsFetchedAt = 0;
+let logsPromise   = null;
+
+/* Streaks, AI Coach and the initial load each used to trigger their own
+   full download of the sheet. Apps Script takes a second or two per call,
+   so flicking between tabs meant waiting repeatedly for data that hadn't
+   changed. Now: serve from memory for 60 seconds, and if two callers ask at
+   once, they share one request instead of firing two.
+   Pass loadLogs(true) to force a fresh pull — used right after saving a log. */
+async function loadLogs(force){
+  const stillFresh = Date.now() - logsFetchedAt < 60000;
+  if(!force && stillFresh && allLogs.length) return allLogs;
+  if(!force && logsPromise) return logsPromise;
+
+  logsPromise = (async () => {
+    try{
+      const res=await fetch(SCRIPT_URL+'?action=getLogs');
+      const data=await res.json();
+      allLogs=(Array.isArray(data)?data:[]).map(l=>({...l,'Date':normalizeDateStr(l['Date'])}));
+      logsFetchedAt=Date.now();
+    }catch(e){
+      // Hold on to whatever we already had. Blanking allLogs on a dropped
+      // connection wipes the client's streak and history off the screen,
+      // which looks far worse than showing slightly stale numbers.
+    }finally{
+      logsPromise=null;
+    }
     updateStreakBar();
-  }catch(e){allLogs=[];}
+    return allLogs;
+  })();
+
+  return logsPromise;
 }
 
 function updateStreakBar(){
