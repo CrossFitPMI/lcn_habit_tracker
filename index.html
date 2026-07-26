@@ -235,6 +235,21 @@
   .tw-legend span::before{content:"";display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:4px;vertical-align:-1px}
   .tw-legend .lg-this::before{background:var(--green)}
   .tw-legend .lg-last::before{background:#b9cfa5}
+
+  /* ── "Work on this" button inside the weakest-habit chip ── */
+  .ai-weak-cta{display:block;width:100%;margin-top:9px;background:var(--green);color:#fff;border:none;border-radius:8px;font-family:"Nunito",sans-serif;font-size:13.5px;font-weight:800;padding:10px;cursor:pointer}
+  .ai-weak-cta:hover{background:var(--green-dark)}
+
+  /* ── Badges ── */
+  .bg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
+  .bg-item{background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:11px 6px 9px;text-align:center}
+  .bg-item.on{background:var(--green-light);border-color:var(--green)}
+  .bg-ico{font-size:23px;line-height:1;filter:grayscale(1);opacity:.4}
+  .bg-item.on .bg-ico{filter:none;opacity:1}
+  .bg-name{font-size:10.5px;font-weight:800;margin-top:6px;color:var(--muted);line-height:1.25;letter-spacing:.2px}
+  .bg-item.on .bg-name{color:var(--green-dark)}
+  .bg-hint{font-size:9.5px;color:var(--muted);margin-top:3px;line-height:1.3}
+  .bg-new{display:inline-block;background:var(--orange);color:#fff;font-size:8.5px;font-weight:800;border-radius:6px;padding:1px 6px;margin-top:4px;letter-spacing:.6px}
 </style>
  <link rel="manifest" href="./manifest.json">
 <meta name="theme-color" content="#3d7a1a">
@@ -437,6 +452,7 @@
         <div class="skeleton"><div class="skel-line" style="height:18px;width:45%"></div><div class="skel-line" style="height:13px;width:60%"></div></div>
         <div class="skeleton"><div class="skel-line" style="height:18px;width:55%"></div><div class="skel-line" style="height:13px;width:40%"></div></div>
       </div>
+     <div id="badge-wrap"></div>
       <label class="lb-toggle-row">
         <input type="checkbox" id="lb-hide-toggle" onchange="setLeaderboardHidden(this.checked)">
         <span>Hide me from the leaderboard — your streak stays private to you and your coach.</span>
@@ -1037,6 +1053,83 @@ async function renderStreaks(){
       </div>`).join('');
   }
   list.innerHTML=html;
+  renderBadges();
+}
+
+/* ── Badges ────────────────────────────────────────────────────────────
+   Every badge is derived from logs already fetched for the other tabs —
+   no new storage, no sheet columns, no Worker changes.
+   Deliberately ALL personal-progress: nothing here depends on leaderboard
+   position, so hiding yourself from the boards never costs you a badge. */
+const BADGES=[
+  {id:'first', icon:'🌱', name:'First Step',    hint:'Log your first day',             got:s=>s.days>=1},
+  {id:'week',  icon:'🔥', name:'Week Warrior',  hint:'Reach a 7-day streak',           got:s=>s.best>=7},
+  {id:'month', icon:'🏆', name:'Month Legend',  hint:'Reach a 30-day streak',          got:s=>s.best>=30},
+  {id:'ton',   icon:'💯', name:'Perfect Day',   hint:'Score 100/100',                  got:s=>s.perfect>=1},
+  {id:'ten',   icon:'⭐', name:'Perfect Ten',   hint:'Ten perfect days',               got:s=>s.perfect>=10},
+  {id:'fifty', icon:'📚', name:'Half Century',  hint:'Log 50 days',                    got:s=>s.days>=50},
+  {id:'water', icon:'💧', name:'Well Watered',  hint:'Hit your water target 10 times', got:s=>s.water>=10},
+  {id:'sleep', icon:'😴', name:'Well Rested',   hint:'Hit 8 hours 10 times',           got:s=>s.sleep>=10},
+  {id:'steps', icon:'👟', name:'Step Machine',  hint:'Hit your step target 10 times',  got:s=>s.steps>=10},
+  {id:'veg',   icon:'🥦', name:'Five a Day',    hint:'Hit 5 portions 10 times',        got:s=>s.fv>=10},
+  {id:'prot',  icon:'🥩', name:'Protein Pro',   hint:'Hit protein 20 times',           got:s=>s.protein>=20},
+  {id:'dry',   icon:'🚫', name:'Clear Head',    hint:'14 alcohol-free days logged',    got:s=>s.dry>=14},
+  {id:'move',  icon:'🏋️', name:'Mover',         hint:'Exercise on 20 logged days',     got:s=>s.exercise>=20},
+  {id:'pb',    icon:'📈', name:'Personal Best', hint:'Match your longest-ever streak', got:s=>s.best>=3&&s.cur>=s.best},
+];
+
+function badgeStats(){
+  const mine=allLogs
+    .filter(l=>l['Client Email']?l['Client Email']===currentEmail:l['Client Name']===currentUser)
+    .map(normalizeAILog);
+  const scored=mine.map(l=>({...l,_s:calcLogScore(l)}));
+  // "Full marks" on a graded habit means the top band, not just any value.
+  const countFull=fn=>scored.filter(l=>fn(l)===15).length;
+  return {
+    days:     new Set(scored.map(l=>String(l['Date']).slice(0,10))).size,
+    perfect:  scored.filter(l=>l._s===100).length,
+    cur:      calcStreakFromLogs(mine),
+    best:     calcBestStreak(mine).len,
+    water:    countFull(l=>scoreWater(l['Water (L)'])),
+    sleep:    countFull(l=>scoreSleep(l['Sleep (hrs)'])),
+    steps:    countFull(l=>scoreSteps(l['Steps'])),
+    fv:       countFull(l=>scoreFV(l['Fruit & Veg Portions'])),
+    protein:  scored.filter(l=>l['Protein Target Hit']==='Yes').length,
+    dry:      scored.filter(l=>l['No Alcohol']==='Yes').length,
+    exercise: scored.filter(l=>l['Exercise Completed']==='Yes').length,
+  };
+}
+
+function renderBadges(){
+  const wrap=document.getElementById('badge-wrap');
+  if(!wrap) return;
+  const s=badgeStats();
+  const earned=BADGES.filter(b=>b.got(s)).map(b=>b.id);
+
+  /* Flag anything earned since the last visit. The moment of earning is the
+     whole point of a badge, and without this it happens invisibly while
+     they're on another tab. Stored per-client so a shared device doesn't
+     show one person's new badges to the next. */
+  const key='lcn_badges_'+currentEmail;
+  let seen=[];
+  try{ seen=JSON.parse(localStorage.getItem(key)||'[]'); }catch(e){ seen=[]; }
+  const fresh=earned.filter(id=>!seen.includes(id));
+  try{ localStorage.setItem(key,JSON.stringify(earned)); }catch(e){}
+
+  wrap.innerHTML=`
+    <div class="lb-board-title" style="margin-top:24px">🏅 Badges (${earned.length}/${BADGES.length})</div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Earned from your own logs — none of these depend on where you place on the boards.</p>
+    <div class="bg-grid">
+      ${BADGES.map(b=>{
+        const on=earned.includes(b.id);
+        return `<div class="bg-item${on?' on':''}">
+          <div class="bg-ico">${on?b.icon:'🔒'}</div>
+          <div class="bg-name">${b.name}</div>
+          <div class="bg-hint">${b.hint}</div>
+          ${on&&fresh.includes(b.id)?'<div class="bg-new">NEW</div>':''}
+        </div>`;
+      }).join('')}
+    </div>`;
 }
 
 async function setLeaderboardHidden(hidden){
@@ -1374,7 +1467,11 @@ async function openAICoachTab(){
   }else{
     weakChip.style.background='#fdeeea';
     weakChip.style.color='var(--red)';
-    weakChip.textContent=`Weakest lever right now: ${a.weakest.label} (${a.weakest.rate}% of target over the last 7 logs)`;
+    // Naming the weak spot isn't much use on its own — the button turns it
+    // into an actual coaching turn without the client having to think of
+    // what to type.
+    weakChip.innerHTML=`Weakest lever right now: ${a.weakest.label} (${a.weakest.rate}% of target over the last 7 logs)
+      <button class="ai-weak-cta" onclick="coachOnWeakest()">Work on ${a.weakest.label} →</button>`;
   }
 
   setUpgradeLinks();
@@ -1505,6 +1602,18 @@ async function startAISession(){
     if(e instanceof AICapReached){addAIBubble(e.message,'coach');lockAIInput();}
     else addAIBubble('Could not reach the coach right now. Check your connection and try again.','coach');
   }
+}
+/* Pre-fills the chat with the client's weakest habit and sends it, so one
+   tap gets them from "here's the problem" to actual coaching on it.
+   Bails out quietly if they've already hit today's cap — the input is
+   disabled at that point and firing anyway would just look broken. */
+function coachOnWeakest(){
+  const a=lastAIAnalytics;
+  if(!a||a.total===0) return;
+  const input=document.getElementById('ai-chat-input');
+  if(!input||input.disabled) return;
+  input.value=`My weakest habit right now is ${a.weakest.label} (${a.weakest.rate}% of target). What's one specific thing I could change this week?`;
+  sendAIMessage();
 }
 
 async function sendAIMessage(){
