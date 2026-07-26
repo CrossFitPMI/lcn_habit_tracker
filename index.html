@@ -763,7 +763,7 @@ async function submitLog() {
       document.getElementById('check-'+h).textContent='';
     });
     updateProgress();
-    setTimeout(loadLogs,1500);
+    setTimeout(()=>loadLogs(true),1500);   // bypass the cache — they just added a row
   }catch(e){showStatus('Error saving. Check your connection.','error');}
   btn.disabled=false;btn.textContent='✓ Save Today\'s Log';
 }
