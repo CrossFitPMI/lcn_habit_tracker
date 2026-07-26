@@ -1,6 +1,6 @@
 // LCN Coach — service worker
 // Bumps CACHE_NAME whenever you want clients to pick up fresh static assets.
-const CACHE_NAME = 'lcn-coach-v2';
+const CACHE_NAME = 'lcn-coach-v3';
 
 // Keep this list to the app "shell" only — never list API/chat endpoints here.
 const APP_SHELL = [
@@ -44,17 +44,28 @@ self.addEventListener('fetch', (event) => {
     return; // let the browser handle it normally
   }
 
-  // Network-first for the HTML shell, so logged-in users always get the
-  // latest app version when online, but still get something offline.
+  // Cache-first for the HTML shell, refreshed in the background.
+  // Network-first meant every single launch sat waiting on the network
+  // before rendering anything — on gym wifi or a weak signal that's the
+  // lag you feel opening the app. Now the stored copy paints immediately
+  // and a fresh one is fetched quietly for next time.
+  // TRADE-OFF: after you push an update, clients see it on their SECOND
+  // launch, not their first. Bump CACHE_NAME whenever you want to be sure
+  // an important change lands.
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-          return response;
-        })
-        .catch(() => caches.match('./index.html'))
+      caches.match('./index.html').then((cached) => {
+        const fromNetwork = fetch(request)
+          .then((response) => {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put('./index.html', copy));
+            return response;
+          })
+          .catch(() => cached);
+        // First ever visit has nothing cached, so it falls through to the
+        // network exactly as before.
+        return cached || fromNetwork;
+      })
     );
     return;
   }
