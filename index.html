@@ -258,10 +258,16 @@
  <link rel="manifest" href="./manifest.json">
 <meta name="theme-color" content="#3d7a1a">
 
+<!-- Favicons. Safari doesn't read the web manifest for tab icons and still
+     wants a real .ico, so favicon.ico is declared first and also sits at the
+     repo root for Safari's implicit /favicon.ico lookup. Paths stay relative
+     so the old github.io/<repo>/ URL keeps working. -->
+<link rel="icon" href="./favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
 
 <!-- iOS home-screen support (Safari ignores the manifest for some of this) -->
-<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="LCN Coach">
