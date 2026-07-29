@@ -1894,7 +1894,8 @@ async function endAISession(){
   .pdash-top .p{font-family:"Nunito",sans-serif;font-size:14px;font-weight:800}
   .pdash-top .vs{font-size:11px;color:var(--muted)}
   #pdash svg{display:block;width:100%}
-  .pdash-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+  .pdash-scope{font-size:10px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);margin:14px 4px 6px}
+  .pdash-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .pdash-m{background:var(--card);border:2px solid var(--border);border-radius:14px;padding:10px 12px;cursor:pointer;transition:all .25s}
   .pdash-m .lb{font-size:11.5px;color:var(--muted);font-weight:600}
   .pdash-m .vl{font-family:"Nunito",sans-serif;font-size:21px;font-weight:900;margin-top:1px}
@@ -1918,22 +1919,25 @@ async function endAISession(){
 </style>
 <script>
 (function(){
+  /* avg:true  → the line is a running AVERAGE (a cumulative total of a score
+                 out of 100 is a number nobody can interpret).
+     avg:false → the line is a running TOTAL, which is what you actually want
+                 for litres, hours and steps. */
   const M={
-    score:{ico:'🎯',label:'Avg Score',color:'#5a9e2f',soft:'#eaf5e0',get:l=>calcLogScore(l),fmt:v=>String(Math.round(v)),unit:'/100',ax:''},
-    water:{ico:'💧',label:'Water',color:'#17808f',soft:'#e2f1f3',get:l=>parseFloat(l['Water (L)'])||0,fmt:v=>v.toFixed(1),unit:'L avg',ax:'L'},
-    sleep:{ico:'😴',label:'Sleep',color:'#6b5ca8',soft:'#ece9f6',get:l=>parseFloat(l['Sleep (hrs)'])||0,fmt:v=>v.toFixed(1),unit:'hrs avg',ax:'h'},
-    steps:{ico:'👟',label:'Steps',color:'#d98a00',soft:'#f9efdc',get:l=>(parseFloat(l['Steps'])||0)/1000,fmt:v=>v.toFixed(1),unit:'k avg',ax:'k'}
+    score:{ico:'🎯',label:'Avg Score',color:'#5a9e2f',soft:'#eaf5e0',get:l=>calcLogScore(l),fmt:v=>String(Math.round(v)),unit:'/100',ax:'',avg:true},
+    water:{ico:'💧',label:'Water',color:'#17808f',soft:'#e2f1f3',get:l=>parseFloat(l['Water (L)'])||0,fmt:v=>v.toFixed(1),unit:'L avg',ax:'L',avg:false},
+    sleep:{ico:'😴',label:'Sleep',color:'#6b5ca8',soft:'#ece9f6',get:l=>parseFloat(l['Sleep (hrs)'])||0,fmt:v=>v.toFixed(1),unit:'hrs avg',ax:'h',avg:false},
+    steps:{ico:'👟',label:'Steps',color:'#d98a00',soft:'#f9efdc',get:l=>(parseFloat(l['Steps'])||0)/1000,fmt:v=>v.toFixed(1),unit:'k avg',ax:'k',avg:false}
   };
   let cur='score';
 
   function myLogs(){
     return allLogs.filter(l=>l['Client Email']?l['Client Email']===currentEmail:l['Client Name']===currentUser);
   }
-  function byDate(logs){ // last log wins per date
-    const m={}; logs.forEach(l=>{m[l['Date']]=l;}); return m;
-  }
+  function byDate(logs){ const m={}; logs.forEach(l=>{m[l['Date']]=l;}); return m; }
   function iso(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
   function monday(d){const x=new Date(d);x.setHours(0,0,0,0);const day=(x.getDay()+6)%7;x.setDate(x.getDate()-day);return x;}
+  function monthKey(d){return d.slice(0,7);}
 
   function ensureDom(){
     if(document.getElementById('pdash'))return;
@@ -1946,22 +1950,26 @@ async function endAISession(){
         '<div class="pdash-top"><span class="p" id="pdash-period"></span><span class="vs" id="pdash-vs"></span></div>'+
         '<svg id="pdash-svg" viewBox="0 0 356 200" role="img" aria-label="Progress chart"></svg>'+
       '</div>'+
+      '<div class="pdash-scope" id="pdash-scope"></div>'+
       '<div class="pdash-grid" id="pdash-grid"></div>'+
       '<div class="pdash-dots">'+
         '<div class="pdash-dh"><span></span><div class="dd"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div><span class="hh">avg</span><span class="hh">change</span></div>'+
         '<div id="pdash-weeks"></div>'+
       '</div>'+
-      '<div class="pdash-note">Bigger dot = better day · line = this month’s running total vs last month (grey)</div>';
+      '<div class="pdash-note">Bigger dot = better day · bars are that week’s daily average</div>';
     list.parentNode.insertBefore(el,list);
   }
 
+  /* Returns one value per day of the month (index 0 = before the 1st).
+     null means "nothing to plot yet" — used so an average series doesn't
+     dive to zero on days before the client's first log. */
   function monthSeries(dm,met,y,mo){
-    const days=new Date(y,mo+1,0).getDate(),out=[0];
-    let run=0;
+    const days=new Date(y,mo+1,0).getDate(),out=[met.avg?null:0];
+    let run=0,n=0;
     for(let d=1;d<=days;d++){
       const l=dm[y+'-'+String(mo+1).padStart(2,'0')+'-'+String(d).padStart(2,'0')];
-      if(l)run+=met.get(l);
-      out.push(run);
+      if(l){run+=met.get(l);n++;}
+      out.push(met.avg ? (n?run/n:null) : run);
     }
     return out;
   }
@@ -1974,31 +1982,41 @@ async function endAISession(){
     const prevS=monthSeries(dm,met,py,pm);
     const names=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-    const W=356,H=200,PL=8,PR=44,lineB=104,barTop=122,barH=54,baseY=barTop+barH;
-    const maxV=Math.max(curS[curS.length-1]||0,prevS[prevS.length-1]||0,1);
+    const W=356,PL=8,PR=48,lineB=104,barTop=122,barH=54,baseY=barTop+barH;
+    const finite=[...curS,...prevS].filter(v=>v!==null&&isFinite(v));
+    const maxV=met.avg?100:Math.max(...finite,1);
     const days=Math.max(curS.length,prevS.length)-1;
-    const xs=(i,n)=>PL+(i/days)*(W-PL-PR);
+    const xs=i=>PL+(i/days)*(W-PL-PR);
     const ly=v=>12+(1-v/maxV)*(lineB-12);
+    const path=s=>s.map((v,i)=>v===null?null:xs(i)+','+ly(v)).filter(Boolean).join(' ');
+
     let s='<defs><linearGradient id="pdg" x1="0" y1="0" x2="0" y2="1">'+
       '<stop offset="0" stop-color="'+met.color+'" stop-opacity=".25"/>'+
       '<stop offset="1" stop-color="'+met.color+'" stop-opacity="0"/></linearGradient></defs>';
-    s+='<polyline fill="none" stroke="#b9c2b0" stroke-width="2" stroke-dasharray="1 4" stroke-linecap="round" points="'+
-       prevS.map((v,i)=>xs(i)+','+ly(v)).join(' ')+'"/>';
-    const pts=curS.map((v,i)=>xs(i)+','+ly(v)).join(' ');
-    s+='<polygon fill="url(#pdg)" points="'+PL+','+ly(0)+' '+pts+' '+xs(curS.length-1)+','+ly(0)+'"/>';
-    s+='<polyline fill="none" stroke="'+met.color+'" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points="'+pts+'"/>';
-    const ex=xs(curS.length-1),ev=curS[curS.length-1],ey=ly(ev);
-    s+='<line x1="'+ex+'" y1="'+ey+'" x2="'+ex+'" y2="'+baseY+'" stroke="'+met.color+'" stroke-width="1" opacity=".3"/>';
-    s+='<circle cx="'+ex+'" cy="'+ey+'" r="5" fill="#fff" stroke="'+met.color+'" stroke-width="3"/>';
-    s+='<text x="'+(W-2)+'" y="'+(ey+4)+'" text-anchor="end" font-size="11" font-weight="800" fill="'+met.color+'">'+met.fmt(ev)+met.ax+'</text>';
 
-    // weekly bars: last 4 ISO weeks, avg per logged day
+    const prevPts=path(prevS);
+    if(prevPts) s+='<polyline fill="none" stroke="#b9c2b0" stroke-width="2" stroke-dasharray="1 4" stroke-linecap="round" points="'+prevPts+'"/>';
+
+    const pts=path(curS);
+    if(pts){
+      const firstX=pts.split(' ')[0].split(',')[0];
+      s+='<polygon fill="url(#pdg)" points="'+firstX+','+ly(0)+' '+pts+' '+xs(curS.length-1)+','+ly(0)+'"/>';
+      s+='<polyline fill="none" stroke="'+met.color+'" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points="'+pts+'"/>';
+      const last=curS.filter(v=>v!==null);
+      const ev=last[last.length-1],ex=xs(curS.length-1),ey=ly(ev);
+      s+='<line x1="'+ex+'" y1="'+ey+'" x2="'+ex+'" y2="'+baseY+'" stroke="'+met.color+'" stroke-width="1" opacity=".3"/>';
+      s+='<circle cx="'+ex+'" cy="'+ey+'" r="5" fill="#fff" stroke="'+met.color+'" stroke-width="3"/>';
+      s+='<text x="'+(W-2)+'" y="'+(ey+2)+'" text-anchor="end" font-size="11" font-weight="800" fill="'+met.color+'">'+met.fmt(ev)+met.ax+'</text>';
+      s+='<text x="'+(W-2)+'" y="'+(ey+12)+'" text-anchor="end" font-size="7.5" font-weight="700" letter-spacing=".5" fill="var(--muted)">'+(met.avg?'MONTH AVG':'MONTH TOTAL')+'</text>';
+    }
+
+    // weekly bars — that week's average per logged day
     const wk=[];
     for(let i=3;i>=0;i--){
       const st=monday(new Date());st.setDate(st.getDate()-7*i);
       let sum=0,n=0;
-      for(let d=0;d<7;d++){const dd=new Date(st);dd.setDate(st.getDate()+d);const l=dm[iso(dd)];if(l){sum+=M[cur].get(l);n++;}}
-      wk.push({lab:'W'+String(Math.ceil((((st-new Date(st.getFullYear(),0,1))/864e5)+1)/7)),v:n?sum/n:0});
+      for(let d=0;d<7;d++){const dd=new Date(st);dd.setDate(st.getDate()+d);const l=dm[iso(dd)];if(l){sum+=met.get(l);n++;}}
+      wk.push({lab:'W'+Math.ceil((((st-new Date(st.getFullYear(),0,1))/864e5)+1)/7),v:n?sum/n:0});
     }
     const maxB=Math.max(...wk.map(w=>w.v),1)*1.15,bw=34,gap=(W-PL-PR-4*bw)/5;
     wk.forEach((w,i)=>{
@@ -2007,19 +2025,26 @@ async function endAISession(){
       s+='<text x="'+(bx+bw/2)+'" y="'+(baseY+13)+'" text-anchor="middle" font-size="10" font-weight="'+(last?700:500)+'" fill="'+(last?met.color:'var(--muted)')+'">'+w.lab+'</text>';
       if(last&&w.v>0){
         s+='<line x1="'+PL+'" y1="'+(baseY-bh)+'" x2="'+(W-PR+4)+'" y2="'+(baseY-bh)+'" stroke="'+met.color+'" stroke-width="1" opacity=".3"/>';
-        s+='<text x="'+(W-2)+'" y="'+(baseY-bh+4)+'" text-anchor="end" font-size="11" font-weight="800" fill="'+met.color+'">'+met.fmt(w.v)+met.ax+'</text>';
+        s+='<text x="'+(W-2)+'" y="'+(baseY-bh+2)+'" text-anchor="end" font-size="11" font-weight="800" fill="'+met.color+'">'+met.fmt(w.v)+met.ax+'</text>';
+        s+='<text x="'+(W-2)+'" y="'+(baseY-bh+12)+'" text-anchor="end" font-size="7.5" font-weight="700" letter-spacing=".5" fill="var(--muted)">THIS WEEK</text>';
       }
     });
+
     document.getElementById('pdash-svg').innerHTML=s;
     const pl=document.getElementById('pdash-period');
     pl.textContent=names[mo]+' · '+met.label;
     pl.style.color=met.color;
     document.getElementById('pdash-vs').textContent='vs. '+names[pm]+' (grey)';
     document.getElementById('pdash-card').style.background=met.soft;
+    document.getElementById('pdash-scope').textContent=names[mo]+' '+y+' — same period as the chart';
   }
 
+  /* Scoped to the current month so the cards and the chart can't disagree —
+     they used to show an all-time average above a single-month chart. */
   function drawCards(){
-    const logs=myLogs(),g=document.getElementById('pdash-grid');
+    const thisMonth=monthKey(iso(new Date()));
+    const logs=myLogs().filter(l=>monthKey(String(l['Date']||''))===thisMonth);
+    const g=document.getElementById('pdash-grid');
     g.innerHTML=Object.entries(M).map(([k,m])=>{
       const vals=logs.map(m.get).filter(v=>v>0);
       const avg=vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:0;
@@ -2066,7 +2091,6 @@ async function endAISession(){
     }catch(e){ /* never let the dashboard break the history list */ }
   };
 
-  // Hook in additively: run the original history render, then the dashboard.
   const _orig=renderMyHistory;
   renderMyHistory=function(){_orig();renderProgressDash();};
 })();
