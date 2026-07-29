@@ -1822,5 +1822,194 @@ async function endAISession(){
   });
   });
 </script>
+<!-- ══════════════ PROGRESS DASHBOARD (additive block — safe to remove) ══════════════
+     Injects charts at the top of My History. Reads allLogs / calcLogScore only.
+     Touches nothing else: no backend calls, no changes to coach, saving or streaks. -->
+<style>
+  #pdash{margin-bottom:22px}
+  .pdash-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px 12px 10px;box-shadow:var(--shadow);transition:background .35s}
+  .pdash-top{display:flex;justify-content:space-between;align-items:center;padding:0 4px 8px}
+  .pdash-top .p{font-family:"Nunito",sans-serif;font-size:14px;font-weight:800}
+  .pdash-top .vs{font-size:11px;color:var(--muted)}
+  #pdash svg{display:block;width:100%}
+  .pdash-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+  .pdash-m{background:var(--card);border:2px solid var(--border);border-radius:14px;padding:10px 12px;cursor:pointer;transition:all .25s}
+  .pdash-m .lb{font-size:11.5px;color:var(--muted);font-weight:600}
+  .pdash-m .vl{font-family:"Nunito",sans-serif;font-size:21px;font-weight:900;margin-top:1px}
+  .pdash-m .vl small{font-size:11px;font-weight:600;color:var(--muted)}
+  .pdash-m.on{color:#fff}
+  .pdash-m.on .lb,.pdash-m.on .vl small{color:rgba(255,255,255,.85)}
+  .pdash-dots{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:12px 10px;box-shadow:var(--shadow);margin-top:12px}
+  .pdash-dh{display:grid;grid-template-columns:40px 1fr 42px 46px;gap:6px;padding:0 4px 4px}
+  .pdash-dh .dd{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-size:10px;color:var(--muted);font-weight:600}
+  .pdash-dh .hh{font-size:10px;color:var(--muted);font-weight:600;text-align:right}
+  .pdash-row{display:grid;grid-template-columns:40px 1fr 42px 46px;align-items:center;gap:6px;padding:6px 4px}
+  .pdash-row .wk{font-size:11px;font-weight:700;color:var(--muted)}
+  .pdash-row .tt{font-family:"Nunito",sans-serif;font-size:14px;font-weight:900;text-align:right}
+  .pdash-row .ch{font-size:11px;font-weight:700;text-align:right}
+  .pdash-row .ch.up{color:var(--green-dark)} .pdash-row .ch.dn{color:#a07800}
+  .pdash-track{display:grid;grid-template-columns:repeat(7,1fr);height:26px}
+  .pdash-cell{display:flex;justify-content:center;align-items:center}
+  .pdash-dot{border-radius:50%;background:var(--green)}
+  .pdash-dot.z{width:4px;height:4px;background:var(--border)}
+  .pdash-note{font-size:11px;color:var(--muted);text-align:center;margin-top:8px}
+</style>
+<script>
+(function(){
+  const M={
+    score:{ico:'🎯',label:'Avg Score',color:'#5a9e2f',soft:'#eaf5e0',get:l=>calcLogScore(l),fmt:v=>String(Math.round(v)),unit:'/100',ax:''},
+    water:{ico:'💧',label:'Water',color:'#17808f',soft:'#e2f1f3',get:l=>parseFloat(l['Water (L)'])||0,fmt:v=>v.toFixed(1),unit:'L avg',ax:'L'},
+    sleep:{ico:'😴',label:'Sleep',color:'#6b5ca8',soft:'#ece9f6',get:l=>parseFloat(l['Sleep (hrs)'])||0,fmt:v=>v.toFixed(1),unit:'hrs avg',ax:'h'},
+    steps:{ico:'👟',label:'Steps',color:'#d98a00',soft:'#f9efdc',get:l=>(parseFloat(l['Steps'])||0)/1000,fmt:v=>v.toFixed(1),unit:'k avg',ax:'k'}
+  };
+  let cur='score';
+
+  function myLogs(){
+    return allLogs.filter(l=>l['Client Email']?l['Client Email']===currentEmail:l['Client Name']===currentUser);
+  }
+  function byDate(logs){ // last log wins per date
+    const m={}; logs.forEach(l=>{m[l['Date']]=l;}); return m;
+  }
+  function iso(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+  function monday(d){const x=new Date(d);x.setHours(0,0,0,0);const day=(x.getDay()+6)%7;x.setDate(x.getDate()-day);return x;}
+
+  function ensureDom(){
+    if(document.getElementById('pdash'))return;
+    const list=document.getElementById('my-log-list');
+    if(!list)return;
+    const el=document.createElement('div');
+    el.id='pdash';
+    el.innerHTML=
+      '<div class="pdash-card" id="pdash-card">'+
+        '<div class="pdash-top"><span class="p" id="pdash-period"></span><span class="vs" id="pdash-vs"></span></div>'+
+        '<svg id="pdash-svg" viewBox="0 0 356 200" role="img" aria-label="Progress chart"></svg>'+
+      '</div>'+
+      '<div class="pdash-grid" id="pdash-grid"></div>'+
+      '<div class="pdash-dots">'+
+        '<div class="pdash-dh"><span></span><div class="dd"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div><span class="hh">avg</span><span class="hh">change</span></div>'+
+        '<div id="pdash-weeks"></div>'+
+      '</div>'+
+      '<div class="pdash-note">Bigger dot = better day · line = this month’s running total vs last month (grey)</div>';
+    list.parentNode.insertBefore(el,list);
+  }
+
+  function monthSeries(dm,met,y,mo){
+    const days=new Date(y,mo+1,0).getDate(),out=[0];
+    let run=0;
+    for(let d=1;d<=days;d++){
+      const l=dm[y+'-'+String(mo+1).padStart(2,'0')+'-'+String(d).padStart(2,'0')];
+      if(l)run+=met.get(l);
+      out.push(run);
+    }
+    return out;
+  }
+
+  function drawChart(){
+    const met=M[cur],dm=byDate(myLogs()),now=new Date();
+    const y=now.getFullYear(),mo=now.getMonth();
+    const curS=monthSeries(dm,met,y,mo).slice(0,now.getDate()+1);
+    const pm=mo===0?11:mo-1,py=mo===0?y-1:y;
+    const prevS=monthSeries(dm,met,py,pm);
+    const names=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    const W=356,H=200,PL=8,PR=44,lineB=104,barTop=122,barH=54,baseY=barTop+barH;
+    const maxV=Math.max(curS[curS.length-1]||0,prevS[prevS.length-1]||0,1);
+    const days=Math.max(curS.length,prevS.length)-1;
+    const xs=(i,n)=>PL+(i/days)*(W-PL-PR);
+    const ly=v=>12+(1-v/maxV)*(lineB-12);
+    let s='<defs><linearGradient id="pdg" x1="0" y1="0" x2="0" y2="1">'+
+      '<stop offset="0" stop-color="'+met.color+'" stop-opacity=".25"/>'+
+      '<stop offset="1" stop-color="'+met.color+'" stop-opacity="0"/></linearGradient></defs>';
+    s+='<polyline fill="none" stroke="#b9c2b0" stroke-width="2" stroke-dasharray="1 4" stroke-linecap="round" points="'+
+       prevS.map((v,i)=>xs(i)+','+ly(v)).join(' ')+'"/>';
+    const pts=curS.map((v,i)=>xs(i)+','+ly(v)).join(' ');
+    s+='<polygon fill="url(#pdg)" points="'+PL+','+ly(0)+' '+pts+' '+xs(curS.length-1)+','+ly(0)+'"/>';
+    s+='<polyline fill="none" stroke="'+met.color+'" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points="'+pts+'"/>';
+    const ex=xs(curS.length-1),ev=curS[curS.length-1],ey=ly(ev);
+    s+='<line x1="'+ex+'" y1="'+ey+'" x2="'+ex+'" y2="'+baseY+'" stroke="'+met.color+'" stroke-width="1" opacity=".3"/>';
+    s+='<circle cx="'+ex+'" cy="'+ey+'" r="5" fill="#fff" stroke="'+met.color+'" stroke-width="3"/>';
+    s+='<text x="'+(W-2)+'" y="'+(ey+4)+'" text-anchor="end" font-size="11" font-weight="800" fill="'+met.color+'">'+met.fmt(ev)+met.ax+'</text>';
+
+    // weekly bars: last 4 ISO weeks, avg per logged day
+    const wk=[];
+    for(let i=3;i>=0;i--){
+      const st=monday(new Date());st.setDate(st.getDate()-7*i);
+      let sum=0,n=0;
+      for(let d=0;d<7;d++){const dd=new Date(st);dd.setDate(st.getDate()+d);const l=dm[iso(dd)];if(l){sum+=M[cur].get(l);n++;}}
+      wk.push({lab:'W'+String(Math.ceil((((st-new Date(st.getFullYear(),0,1))/864e5)+1)/7)),v:n?sum/n:0});
+    }
+    const maxB=Math.max(...wk.map(w=>w.v),1)*1.15,bw=34,gap=(W-PL-PR-4*bw)/5;
+    wk.forEach((w,i)=>{
+      const bx=PL+gap+i*(bw+gap),bh=w.v/maxB*barH,last=i===3;
+      s+='<rect x="'+bx+'" y="'+(baseY-bh)+'" width="'+bw+'" height="'+Math.max(bh,1)+'" rx="5" fill="'+met.color+'" opacity="'+(last?1:.45)+'"/>';
+      s+='<text x="'+(bx+bw/2)+'" y="'+(baseY+13)+'" text-anchor="middle" font-size="10" font-weight="'+(last?700:500)+'" fill="'+(last?met.color:'var(--muted)')+'">'+w.lab+'</text>';
+      if(last&&w.v>0){
+        s+='<line x1="'+PL+'" y1="'+(baseY-bh)+'" x2="'+(W-PR+4)+'" y2="'+(baseY-bh)+'" stroke="'+met.color+'" stroke-width="1" opacity=".3"/>';
+        s+='<text x="'+(W-2)+'" y="'+(baseY-bh+4)+'" text-anchor="end" font-size="11" font-weight="800" fill="'+met.color+'">'+met.fmt(w.v)+met.ax+'</text>';
+      }
+    });
+    document.getElementById('pdash-svg').innerHTML=s;
+    const pl=document.getElementById('pdash-period');
+    pl.textContent=names[mo]+' · '+met.label;
+    pl.style.color=met.color;
+    document.getElementById('pdash-vs').textContent='vs. '+names[pm]+' (grey)';
+    document.getElementById('pdash-card').style.background=met.soft;
+  }
+
+  function drawCards(){
+    const logs=myLogs(),g=document.getElementById('pdash-grid');
+    g.innerHTML=Object.entries(M).map(([k,m])=>{
+      const vals=logs.map(m.get).filter(v=>v>0);
+      const avg=vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:0;
+      const on=k===cur;
+      return '<div class="pdash-m'+(on?' on':'')+'" data-k="'+k+'" role="button" aria-pressed="'+on+'"'+
+        (on?' style="background:'+m.color+';border-color:'+m.color+'"':'')+'>'+
+        '<div class="lb">'+m.ico+' '+m.label+'</div>'+
+        '<div class="vl">'+(vals.length?m.fmt(avg):'—')+'<small> '+m.unit+'</small></div></div>';
+    }).join('');
+    g.querySelectorAll('.pdash-m').forEach(c=>c.onclick=()=>{cur=c.dataset.k;drawCards();drawChart();});
+  }
+
+  function drawWeeks(){
+    const dm=byDate(myLogs());
+    let html='',prev=null;
+    for(let i=4;i>=0;i--){
+      const st=monday(new Date());st.setDate(st.getDate()-7*i);
+      let cells='',sum=0,n=0;
+      for(let d=0;d<7;d++){
+        const dd=new Date(st);dd.setDate(st.getDate()+d);
+        const l=dm[iso(dd)];
+        if(!l){cells+='<div class="pdash-cell"><span class="pdash-dot z" title="no log"></span></div>';continue;}
+        const sc=calcLogScore(l);sum+=sc;n++;
+        const sz=6+(sc/100)*13;
+        cells+='<div class="pdash-cell"><span class="pdash-dot" style="width:'+sz+'px;height:'+sz+'px;opacity:'+(0.45+sc/200)+'" title="'+sc+'/100"></span></div>';
+      }
+      const avg=n?Math.round(sum/n):0;
+      let ch='<span class="ch">—</span>';
+      if(prev!==null&&prev>0&&n)ch=avg>=prev?'<span class="ch up">▲ '+Math.round((avg-prev)/prev*100)+'%</span>':'<span class="ch dn">▼ '+Math.round((prev-avg)/prev*100)+'%</span>';
+      if(n)prev=avg;
+      const wn=Math.ceil((((st-new Date(st.getFullYear(),0,1))/864e5)+1)/7);
+      html+='<div class="pdash-row"><span class="wk">W'+wn+'</span><div class="pdash-track">'+cells+'</div><span class="tt">'+(n?avg:'—')+'</span>'+ch+'</div>';
+    }
+    document.getElementById('pdash-weeks').innerHTML=html;
+  }
+
+  window.renderProgressDash=function(){
+    try{
+      ensureDom();
+      if(!document.getElementById('pdash'))return;
+      if(!myLogs().length){document.getElementById('pdash').style.display='none';return;}
+      document.getElementById('pdash').style.display='';
+      drawCards();drawChart();drawWeeks();
+    }catch(e){ /* never let the dashboard break the history list */ }
+  };
+
+  // Hook in additively: run the original history render, then the dashboard.
+  const _orig=renderMyHistory;
+  renderMyHistory=function(){_orig();renderProgressDash();};
+})();
+</script>
+<!-- ══════════════ END PROGRESS DASHBOARD ══════════════ -->
+
 </body>
 </html>
