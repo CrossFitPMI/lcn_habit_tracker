@@ -575,7 +575,7 @@ function setTier(t,email){
 async function refreshTier(){
   if(!currentEmail||!WORKER_URL) return;
   try{
-    const res=await fetch(WORKER_URL+'?action=tier&clientId='+encodeURIComponent(currentEmail));
+    const res=await fetchT(WORKER_URL+'?action=tier&clientId='+encodeURIComponent(currentEmail),{},8000);
     if(!res.ok) return;
     const data=await res.json();
     if(data && data.tier) setTier(data.tier,currentEmail);
@@ -736,8 +736,11 @@ function doLogin() {
   errEl.textContent = '';
   currentUser = name;
   currentEmail = email;
-  localStorage.setItem('lcn_user', name);
-  localStorage.setItem('lcn_email', email);
+  // Safari in Private Browsing throws on setItem; login must still work.
+  try{
+    localStorage.setItem('lcn_user', name);
+    localStorage.setItem('lcn_email', email);
+  }catch(e){}
   showApp();
 }
 function showApp() {
@@ -833,6 +836,17 @@ function normalizeDateStr(v){
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
 
+/* Not one fetch in this app had a timeout, so a single slow Apps Script call
+   could leave a tab spinning indefinitely with no way out. Safari appears to
+   hit this far more readily than Chrome. Fail fast instead, and let callers
+   fall back to cached data. */
+async function fetchT(url, opts, ms){
+  const ctl = new AbortController();
+  const t = setTimeout(()=>ctl.abort(), ms || 10000);
+  try { return await fetch(url, Object.assign({}, opts || {}, { signal: ctl.signal })); }
+  finally { clearTimeout(t); }
+}
+
 let logsFetchedAt = 0;
 let logsPromise   = null;
 
@@ -858,7 +872,7 @@ async function loadLogs(force){
 
   logsPromise = (async () => {
     try{
-      const res=await fetch(SCRIPT_URL+'?action=getLogs');
+      const res=await fetchT(SCRIPT_URL+'?action=getLogs',{},12000);
       const data=await res.json();
       allLogs=(Array.isArray(data)?data:[]).map(l=>({...l,'Date':normalizeDateStr(l['Date'])}));
       logsFetchedAt=Date.now();
@@ -1072,12 +1086,13 @@ function calcBestStreak(logs){
 }
 
 async function renderStreaks(){
-  await loadLogs(); // fresh data so today's logs count
-  try{
-    const res=await fetch(SCRIPT_URL+'?action=getPrefs');
-    lbPrefs=await res.json();
-    if(!Array.isArray(lbPrefs)) lbPrefs=[];
-  }catch(e){ lbPrefs=[]; }
+  /* These two Apps Script calls used to run one after the other, so the tab
+     waited on two cold round trips before drawing anything. */
+  const [, prefs] = await Promise.all([
+    loadLogs(),
+    fetchT(SCRIPT_URL+'?action=getPrefs',{},10000).then(r=>r.json()).catch(()=>[])
+  ]);
+  lbPrefs = Array.isArray(prefs) ? prefs : [];
 
   const meHidden=lbPrefs.some(p=>p.email===currentEmail&&p.hidden);
   document.getElementById('lb-hide-toggle').checked=meHidden;
@@ -1244,7 +1259,7 @@ let lastMealPlan=null;
 
 async function loadMealPrefs(){
   try{
-    const res=await fetch(SCRIPT_URL+'?action=getMealPrefs&email='+encodeURIComponent(currentEmail));
+    const res=await fetchT(SCRIPT_URL+'?action=getMealPrefs&email='+encodeURIComponent(currentEmail),{},10000);
     mealPrefs=await res.json();
   }catch(e){ mealPrefs=null; }
 }
@@ -1365,7 +1380,7 @@ Keep it COMPACT so the whole plan fits in one response:
     if(data.tier) setTier(data.tier,currentEmail);
     const parsed=JSON.parse((data.text||'').replace(/```json|```/g,'').trim());
     lastMealPlan=parsed;
-    localStorage.setItem('lcn_last_mealplan_'+currentEmail,JSON.stringify(parsed));
+    try{ localStorage.setItem('lcn_last_mealplan_'+currentEmail,JSON.stringify(parsed)); }catch(e){}
     renderMealPlan(parsed);
   }catch(e){
     showMealPlanError("That one didn't come out right — hit generate again, it won't count against today's plans.");
@@ -1537,7 +1552,11 @@ async function openAICoachTab(){
   document.getElementById('ai-config-notice').style.display = WORKER_URL ? 'none' : 'block';
   document.getElementById('ai-body').style.display = WORKER_URL ? 'block' : 'none';
   if(!WORKER_URL) return;
-  await loadLogs(); // refresh so a just-logged entry shows up immediately
+  /* This used to be a bare `await loadLogs()`, so a slow or stalled log fetch
+     stopped the check-in from ever starting — the single most likely reason the
+     coach looked dead while the rest of the app worked. Wait briefly, then open
+     the session with whatever data we have and let the refresh land behind us. */
+  await Promise.race([ loadLogs(), new Promise(r=>setTimeout(r,4000)) ]);
   if(aiSessionStarted) return; // don't restart an existing chat on re-visits
   aiSessionStarted=true;
 
