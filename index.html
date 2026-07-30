@@ -2,6 +2,20 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<script>
+/* GitHub Pages will happily serve this over plain http, and the Worker's CORS
+   allowlist contains only the https origin — so over http EVERY Worker call is
+   blocked by the browser and the AI Coach dies. Chrome silently auto-upgrades
+   to https and hides the problem; Safari does not. Bounce to https before any
+   script gets a chance to fetch. Also tick "Enforce HTTPS" in GitHub Pages
+   settings so it never reaches the browser over http in the first place. */
+(function(){
+  var h = location.hostname;
+  if (location.protocol === 'http:' && h !== 'localhost' && h !== '127.0.0.1') {
+    location.replace('https://' + location.host + location.pathname + location.search + location.hash);
+  }
+})();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#3d7a1a">
 <title>Lean Comp Nutrition · Daily Habit Tracker</title>
@@ -837,9 +851,8 @@ function normalizeDateStr(v){
 }
 
 /* Not one fetch in this app had a timeout, so a single slow Apps Script call
-   could leave a tab spinning indefinitely with no way out. Safari appears to
-   hit this far more readily than Chrome. Fail fast instead, and let callers
-   fall back to cached data. */
+   could leave a tab spinning indefinitely with no way out. Fail fast instead
+   and let callers fall back to cached data. */
 async function fetchT(url, opts, ms){
   const ctl = new AbortController();
   const t = setTimeout(()=>ctl.abort(), ms || 10000);
@@ -1088,11 +1101,11 @@ function calcBestStreak(logs){
 async function renderStreaks(){
   /* These two Apps Script calls used to run one after the other, so the tab
      waited on two cold round trips before drawing anything. */
-  const [, prefs] = await Promise.all([
+  const results = await Promise.all([
     loadLogs(),
     fetchT(SCRIPT_URL+'?action=getPrefs',{},10000).then(r=>r.json()).catch(()=>[])
   ]);
-  lbPrefs = Array.isArray(prefs) ? prefs : [];
+  lbPrefs = Array.isArray(results[1]) ? results[1] : [];
 
   const meHidden=lbPrefs.some(p=>p.email===currentEmail&&p.hidden);
   document.getElementById('lb-hide-toggle').checked=meHidden;
@@ -1553,9 +1566,8 @@ async function openAICoachTab(){
   document.getElementById('ai-body').style.display = WORKER_URL ? 'block' : 'none';
   if(!WORKER_URL) return;
   /* This used to be a bare `await loadLogs()`, so a slow or stalled log fetch
-     stopped the check-in from ever starting — the single most likely reason the
-     coach looked dead while the rest of the app worked. Wait briefly, then open
-     the session with whatever data we have and let the refresh land behind us. */
+     stopped the check-in from ever starting. Wait briefly, then open with
+     whatever data we have and let the refresh land behind us. */
   await Promise.race([ loadLogs(), new Promise(r=>setTimeout(r,4000)) ]);
   if(aiSessionStarted) return; // don't restart an existing chat on re-visits
   aiSessionStarted=true;
