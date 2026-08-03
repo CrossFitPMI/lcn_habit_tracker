@@ -349,6 +349,10 @@
 
     <div id="tab-log">
 
+      <div class="edit-banner" id="edit-banner" style="display:none">
+        <span id="edit-banner-text"></span>
+        <button type="button" onclick="cancelEditLog()">Cancel</button>
+      </div>
       <div class="prefill-note" id="prefill-note" style="display:none">📋 Showing your last log's values as a starting point — <b>adjust anything that's changed</b> before saving. Dashed fields haven't been confirmed yet.</div>
 
       <div class="progress-wrap">
@@ -794,6 +798,76 @@ function toggleHabit(h) {
 }
 
 // ── SUBMIT ──
+/* Holds the ID of the log being edited, or '' when adding a new one.
+   submitLog() branches on this — the only difference between adding and
+   editing is which action the server is asked to perform. */
+let editingLogId='';
+
+function setSelectIfPresent_(id,val){
+  const el=document.getElementById(id);
+  if(!el) return;
+  const v=String(val===undefined||val===null?'':val);
+  const match=[...el.options].some(function(o){ return o.value===v; });
+  el.value = match ? v : '0';
+  el.classList.remove('prefilled');
+}
+
+function startEditLog(id){
+  const l=allLogs.find(function(x){ return String(x['ID'])===String(id); });
+  if(!l){ showStatus('Could not find that log to edit.','error'); return; }
+
+  editingLogId=String(id);
+
+  // switch to the form, reusing the existing tab machinery
+  const logTabBtn=document.querySelector('.tab');
+  switchTab('log', logTabBtn);
+
+  document.getElementById('f-date').value=String(l['Date']||'').slice(0,10);
+  setSelectIfPresent_('f-water', l['Water (L)']);
+  setSelectIfPresent_('f-sleep', l['Sleep (hrs)']);
+  setSelectIfPresent_('f-steps', l['Steps']);
+  setSelectIfPresent_('f-fruitsVeg', l['Fruit & Veg Portions']);
+  const notesEl=document.getElementById('f-notes');
+  notesEl.value=l['Notes']||''; notesEl.classList.remove('prefilled');
+
+  habits={
+    protein: l['Protein Target Hit']==='Yes',
+    alcohol: l['No Alcohol']==='Yes',
+    exercise: l['Exercise Completed']==='Yes'
+  };
+  ['protein','alcohol','exercise'].forEach(function(h){
+    const item=document.getElementById('toggle-'+h);
+    const check=document.getElementById('check-'+h);
+    item.classList.remove('prefilled');
+    if(habits[h]){ item.classList.add('active'); check.textContent='✓'; }
+    else { item.classList.remove('active'); check.textContent=''; }
+  });
+
+  // the prefill note is about unconfirmed values — wrong message while editing
+  document.getElementById('prefill-note').style.display='none';
+  document.getElementById('edit-banner-text').innerHTML=
+    '✏️ Editing your log for <b>'+formatDate(l['Date'])+'</b>. Saving will replace it.';
+  document.getElementById('edit-banner').style.display='flex';
+  document.getElementById('submit-btn').textContent='✓ Update this log';
+  updateProgress();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function cancelEditLog(){
+  editingLogId='';
+  document.getElementById('edit-banner').style.display='none';
+  document.getElementById('submit-btn').textContent="✓ Save Today's Log";
+  document.getElementById('f-date').value=today();
+  ['f-water','f-sleep','f-steps','f-fruitsVeg'].forEach(function(i){ document.getElementById(i).value='0'; });
+  document.getElementById('f-notes').value='';
+  habits={protein:false,alcohol:false,exercise:false};
+  ['protein','alcohol','exercise'].forEach(function(h){
+    document.getElementById('toggle-'+h).classList.remove('active');
+    document.getElementById('check-'+h).textContent='';
+  });
+  updateProgress();
+}
+
 async function submitLog() {
   const water=document.getElementById('f-water').value;
   const sleep=document.getElementById('f-sleep').value;
@@ -808,13 +882,39 @@ async function submitLog() {
   const btn=document.getElementById('submit-btn');
   btn.disabled=true;btn.textContent='Saving...';
   try{
+    const editing = !!editingLogId;
     await fetch(SCRIPT_URL,{method:'POST',mode:'no-cors',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({action:'addLog',date,clientName:currentUser,clientEmail:currentEmail,
+      body:JSON.stringify({action: editing?'updateLog':'addLog', id: editingLogId,
+        date,clientName:currentUser,clientEmail:currentEmail,
         water:water||0,proteinHit:habits.protein,noAlcohol:habits.alcohol,
         exercise:habits.exercise,exerciseCompleted:habits.exercise,sleep:sleep||0,steps:steps||0,
         fruitsVeg:fv||0,score,notes})
     });
+
+    /* POSTs go out as no-cors, so the response is unreadable and a failure
+       would otherwise look identical to a success. Re-read the logs and
+       confirm the change actually landed before saying it worked. */
+    if(editing){
+      const savedId=editingLogId;
+      editingLogId='';
+      await new Promise(function(r){ setTimeout(r,1200); });
+      await loadLogs(true);
+      const check=allLogs.find(function(x){ return String(x['ID'])===savedId; });
+      const landed = check && String(check['Date']||'').slice(0,10)===date &&
+                     String(check['Notes']||'')===notes;
+      if(landed){
+        showStatus('Log updated. Score: '+score+'/100','success');
+      }else{
+        showStatus("Saved, but the change hasn't shown up yet — pull to refresh in a moment to check.",'error');
+      }
+      document.getElementById('edit-banner').style.display='none';
+      cancelEditLog();
+      renderMyHistory();
+      btn.disabled=false;btn.textContent="✓ Save Today's Log";
+      return;
+    }
+
     const msg = score===100 ? '🏆 Perfect 100/100! Incredible day!' : 'Habits logged! Score: '+score+'/100 💪';
     showStatus(msg,'success');
     document.getElementById('f-water').value='0';
@@ -1066,6 +1166,7 @@ function renderLogCard(l,showName){
         <span class="habit-tag ${exercise?'hit':'miss'}">${exercise?'✓':'✗'} Exercise</span>
       </div>
       ${notes?`<div class="log-notes">"${notes}"</div>`:''}
+      ${(!showName && l['ID'])?`<button class="log-edit-btn" onclick="startEditLog('${l['ID']}')">✏️ Edit this log</button>`:''}
     </div>`;
 }
 
@@ -2052,6 +2153,15 @@ async function endAISession(){
   .slip-ok{background:var(--green-light);border:1px solid var(--border);border-radius:12px;
            padding:14px;font-size:13px;color:var(--green-dark);text-align:center}
   .slip-legend{font-size:11px;color:var(--muted);margin:2px 0 10px}
+
+  .log-edit-btn{background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;
+                font-size:11.5px;font-weight:600;padding:4px 10px;cursor:pointer;margin-top:8px}
+  .log-edit-btn:hover{border-color:var(--green);color:var(--green-dark)}
+  .edit-banner{background:#fff8e6;border:1px solid var(--orange);border-radius:10px;padding:10px 12px;
+               margin-bottom:14px;font-size:12.5px;line-height:1.5;color:var(--text);
+               display:flex;align-items:center;gap:10px}
+  .edit-banner button{margin-left:auto;background:none;border:1px solid var(--border);border-radius:8px;
+                      padding:4px 10px;font-size:11.5px;font-weight:600;cursor:pointer;color:var(--muted)}
 
   /* ── Intro animation ──────────────────────────────────────────────
      Only runs while #pdash carries .pd-intro, added on the first render of a
