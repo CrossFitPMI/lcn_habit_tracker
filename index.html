@@ -536,7 +536,9 @@
     </div>
 
     <div id="tab-coach" style="display:none">
-      <div class="section-label">All Client Logs</div>
+      <div class="section-label">Who's Slipping</div>
+      <div id="slip-panel"></div>
+      <div class="section-label" style="margin-top:22px">All Client Logs</div>
       <div class="filter-row">
         <button class="filter-btn active" onclick="setCoachFilter('all',this)">All</button>
         <button class="filter-btn" onclick="setCoachFilter('today',this)">Today</button>
@@ -947,6 +949,54 @@ function setCoachFilter(f,btn){
 
 let coachAllLogs=[];
 let coachLoadError='';
+
+/* Groups every client's logs and reports how many days since each last
+   logged. Deliberately shows days-since rather than a red/green verdict —
+   you know which of these people are away on holiday and which have gone
+   quiet, and the app doesn't. */
+function renderSlipPanel(){
+  const el=document.getElementById('slip-panel');
+  if(!el) return;
+  if(!coachAllLogs.length){ el.innerHTML=''; return; }
+
+  const byClient={};
+  coachAllLogs.forEach(function(l){
+    const email=String(l['Client Email']||'').toLowerCase().trim();
+    const key=email||('name:'+(l['Client Name']||''));
+    if(!byClient[key]) byClient[key]={name:l['Client Name']||'—',email:email,dates:[]};
+    if(l['Client Name']) byClient[key].name=l['Client Name'];
+    if(l['Date']) byClient[key].dates.push(String(l['Date']).slice(0,10));
+  });
+
+  const today=new Date(); today.setHours(0,0,0,0);
+  const rows=Object.keys(byClient).map(function(k){
+    const c=byClient[k];
+    const last=c.dates.sort().pop();
+    const d=new Date(last); d.setHours(0,0,0,0);
+    const days=Math.round((today-d)/86400000);
+    return {name:c.name, last:last, days:days};
+  }).filter(function(r){ return r.days>=2; })          // 0-1 days isn't slipping
+   .sort(function(a,b){ return b.days-a.days; });
+
+  if(!rows.length){
+    el.innerHTML='<div class="slip-ok">Everyone has logged in the last day. Nothing to chase. 👌</div>';
+    return;
+  }
+
+  /* Amber not red. These are people who missed a few days, not a problem to
+     be flagged — and you'll be reading this before deciding whether to text. */
+  const colourFor=function(d){ return d>=14?'#a0522d':(d>=7?'#c98a00':'#d4b106'); };
+  el.innerHTML=
+    '<div class="slip-legend">Sorted by how long since their last log. 2+ days only.</div>'+
+    rows.map(function(r){
+      return '<div class="slip-row">'+
+        '<span class="slip-dot" style="background:'+colourFor(r.days)+'"></span>'+
+        '<div><div class="slip-name">'+r.name+'</div>'+
+        '<div class="slip-meta">Last logged '+r.last+'</div></div>'+
+        '<div class="slip-days"><b style="color:'+colourFor(r.days)+'">'+r.days+'</b><span>days</span></div>'+
+      '</div>';
+    }).join('');
+}
 async function renderCoachView(){
   if(!coachUnlocked) return;
   const list0=document.getElementById('coach-log-list');
@@ -979,6 +1029,7 @@ async function renderCoachView(){
     const mon=new Date();mon.setDate(mon.getDate()-mon.getDay()+1);mon.setHours(0,0,0,0);
     logs=logs.filter(l=>l['Date']&&new Date(l['Date'])>=mon);
   }
+  renderSlipPanel();   // always from the full set, never the filtered view
   const list=document.getElementById('coach-log-list');
   if(!logs.length){list.innerHTML='<div class="empty-state"><div class="icon">👁️</div>No logs found for this period.</div>';return;}
   list.innerHTML=logs.map(l=>renderLogCard(l,true)).join('');
@@ -1987,6 +2038,20 @@ async function endAISession(){
   .pdash-dot{border-radius:50%;background:var(--green)}
   .pdash-dot.z{width:4px;height:4px;background:var(--border)}
   .pdash-note{font-size:11px;color:var(--muted);text-align:center;margin-top:8px}
+
+  /* Who's Slipping — coach-only. A text from you beats any automated nudge,
+     so this exists to tell you who to text, not to message them for you. */
+  .slip-row{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);
+            border-radius:12px;padding:10px 12px;margin-bottom:8px;box-shadow:var(--shadow)}
+  .slip-dot{width:10px;height:10px;border-radius:50%;flex:0 0 10px}
+  .slip-name{font-weight:700;font-size:14px;color:var(--text)}
+  .slip-meta{font-size:11.5px;color:var(--muted);margin-top:1px}
+  .slip-days{margin-left:auto;text-align:right}
+  .slip-days b{font-family:"Nunito",sans-serif;font-size:19px;font-weight:900;line-height:1}
+  .slip-days span{display:block;font-size:9.5px;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+  .slip-ok{background:var(--green-light);border:1px solid var(--border);border-radius:12px;
+           padding:14px;font-size:13px;color:var(--green-dark);text-align:center}
+  .slip-legend{font-size:11px;color:var(--muted);margin:2px 0 10px}
 
   /* ── Intro animation ──────────────────────────────────────────────
      Only runs while #pdash carries .pd-intro, added on the first render of a
