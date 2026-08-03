@@ -946,14 +946,32 @@ function setCoachFilter(f,btn){
 }
 
 let coachAllLogs=[];
+let coachLoadError='';
 async function renderCoachView(){
   if(!coachUnlocked) return;
+  const list0=document.getElementById('coach-log-list');
   if(!coachAllLogs.length){
+    coachLoadError='';
+    if(list0) list0.innerHTML='<div class="empty-state"><div class="icon">⏳</div>Loading client logs…</div>';
     try{
-      const res=await fetchT(SCRIPT_URL+'?action=coachLogs&pin='+encodeURIComponent(coachPin),{},15000);
+      const res=await fetchT(SCRIPT_URL+'?action=coachLogs&pin='+encodeURIComponent(coachPin),{},20000);
       const data=await res.json();
-      coachAllLogs=Array.isArray(data)?data.map(l=>({...l,'Date':normalizeDateStr(l['Date'])})):[];
-    }catch(err){ coachAllLogs=[]; }
+      if(Array.isArray(data)){
+        coachAllLogs=data.map(l=>({...l,'Date':normalizeDateStr(l['Date'])}));
+      }else{
+        /* The server answered but refused. Saying "no logs found" here sends
+           you looking in the wrong place entirely. */
+        coachLoadError = (data && data.error==='unauthorised')
+          ? 'The PIN was accepted but the server refused the data request. Check the PIN stored by setCoachPin in Apps Script.'
+          : 'Server returned an unexpected response: '+JSON.stringify(data).slice(0,120);
+      }
+    }catch(err){
+      coachLoadError='Could not reach the server (timed out or blocked). Check your connection and try again.';
+    }
+    if(coachLoadError){
+      if(list0) list0.innerHTML='<div class="empty-state"><div class="icon">⚠️</div>'+coachLoadError+'</div>';
+      return;
+    }
   }
   let logs=[...coachAllLogs];
   if(coachFilter==='today'){const t=today();logs=logs.filter(l=>l['Date']===t);}
@@ -1063,6 +1081,10 @@ function updatePinDots() {
   }
 }
 async function checkPin() {
+  /* Verifying now means a network round trip, so without feedback the modal
+     just sits there and the client taps again. */
+  const errEl=document.getElementById('pin-error');
+  if(errEl){ errEl.style.color='var(--muted)'; errEl.textContent='Checking…'; }
   /* The PIN used to be a constant in this file, so anyone who viewed source
      could read it — and every client's data was already in the browser
      regardless. Now the PIN is verified by Apps Script, and the full dataset
@@ -1081,6 +1103,7 @@ async function checkPin() {
     renderCoachView();
   } else {
     for(let i=0;i<4;i++) document.getElementById('pd'+i).className='pin-dot wrong';
+    if(errEl) errEl.style.color='';
     document.getElementById('pin-error').textContent = 'Incorrect PIN — try again';
     setTimeout(()=>{ pinEntry=''; updatePinDots(); },900);
   }
