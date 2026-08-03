@@ -2120,7 +2120,7 @@ async function endAISession(){
         '<div class="lb">'+m.ico+' '+m.label+'</div>'+
         '<div class="vl">'+(vals.length?m.fmt(avg):'—')+'<small> '+m.unit+'</small></div></div>';
     }).join('');
-    g.querySelectorAll('.pdash-m').forEach(c=>c.onclick=()=>{cur=c.dataset.k;drawCards();drawChart();});
+    g.querySelectorAll('.pdash-m').forEach(c=>c.onclick=()=>{cur=c.dataset.k;drawCards();drawChart();playIntro();});
   }
 
   function drawWeeks(){
@@ -2147,16 +2147,20 @@ async function endAISession(){
     document.getElementById('pdash-weeks').innerHTML=html;
   }
 
-  /* First render of the session only. Switching metric redraws the chart but
-     deliberately doesn't replay this — the colour change is enough. */
-  let introPlayed=false;
+  /* Replays on first render AND on every metric switch.
+     The class has to be removed and re-added to restart a CSS animation, and
+     a reflow must be forced in between — without `void el.offsetWidth` the
+     browser batches both changes into one frame, sees no net difference, and
+     nothing happens. */
+  let introTimer=null;
   function playIntro(){
-    if(introPlayed) return;
-    introPlayed=true;
     const el=document.getElementById('pdash');
     if(!el) return;
+    el.classList.remove('pd-intro');
+    void el.offsetWidth;                 // force reflow so the animation can restart
     el.classList.add('pd-intro');
-    setTimeout(function(){ el.classList.remove('pd-intro'); }, 1300);
+    clearTimeout(introTimer);
+    introTimer=setTimeout(function(){ el.classList.remove('pd-intro'); }, 1400);
   }
 
   window.renderProgressDash=function(){
