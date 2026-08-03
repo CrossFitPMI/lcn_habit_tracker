@@ -1963,18 +1963,23 @@ async function endAISession(){
 
   /* Anyone with "Reduce Motion" enabled in iOS/macOS accessibility settings
      gets the finished chart instantly, with no movement at all. */
+  /* .pd-anim  = chart + metric cards. Replays every time the metric changes.
+     .pd-intro = additionally the weekly dot table. Only on opening the tab,
+                 because the dot data doesn't change when you switch metric —
+                 re-animating it would draw the eye to something that hasn't
+                 actually moved. */
   @media (prefers-reduced-motion: no-preference){
-    .pd-intro .pdbar{
+    .pd-anim .pdbar{
       transform-box:fill-box; transform-origin:50% 100%;
       animation:pdGrow .5s cubic-bezier(.2,.8,.3,1) backwards;
     }
-    .pd-intro .pdline{ stroke-dasharray:1; animation:pdDraw .75s cubic-bezier(.4,0,.2,1) backwards }
-    .pd-intro .pdfade{ animation:pdFade .5s ease-out .3s backwards }
-    .pd-intro .pdash-m{ animation:pdRise .45s cubic-bezier(.2,.7,.3,1) backwards }
-    .pd-intro .pdash-m:nth-child(1){animation-delay:.30s}
-    .pd-intro .pdash-m:nth-child(2){animation-delay:.36s}
-    .pd-intro .pdash-m:nth-child(3){animation-delay:.42s}
-    .pd-intro .pdash-m:nth-child(4){animation-delay:.48s}
+    .pd-anim .pdline{ stroke-dasharray:1; animation:pdDraw .75s cubic-bezier(.4,0,.2,1) backwards }
+    .pd-anim .pdfade{ animation:pdFade .5s ease-out .3s backwards }
+    .pd-anim .pdash-m{ animation:pdRise .45s cubic-bezier(.2,.7,.3,1) backwards }
+    .pd-anim .pdash-m:nth-child(1){animation-delay:.30s}
+    .pd-anim .pdash-m:nth-child(2){animation-delay:.36s}
+    .pd-anim .pdash-m:nth-child(3){animation-delay:.42s}
+    .pd-anim .pdash-m:nth-child(4){animation-delay:.48s}
     .pd-intro .pdash-row{ animation:pdRise .4s ease-out backwards }
     .pd-intro .pdash-row:nth-child(1){animation-delay:.44s}
     .pd-intro .pdash-row:nth-child(2){animation-delay:.50s}
@@ -2120,7 +2125,7 @@ async function endAISession(){
         '<div class="lb">'+m.ico+' '+m.label+'</div>'+
         '<div class="vl">'+(vals.length?m.fmt(avg):'—')+'<small> '+m.unit+'</small></div></div>';
     }).join('');
-    g.querySelectorAll('.pdash-m').forEach(c=>c.onclick=()=>{cur=c.dataset.k;drawCards();drawChart();playIntro();});
+    g.querySelectorAll('.pdash-m').forEach(c=>c.onclick=()=>{cur=c.dataset.k;drawCards();drawChart();playIntro(false);});   // metric switch: chart only, dots stay put
   }
 
   function drawWeeks(){
@@ -2153,14 +2158,17 @@ async function endAISession(){
      browser batches both changes into one frame, sees no net difference, and
      nothing happens. */
   let introTimer=null;
-  function playIntro(){
+  /* full=true  → everything, including the weekly dot table (opening the tab)
+     full=false → chart and metric cards only (switching metric) */
+  function playIntro(full){
     const el=document.getElementById('pdash');
     if(!el) return;
-    el.classList.remove('pd-intro');
+    el.classList.remove('pd-anim','pd-intro');
     void el.offsetWidth;                 // force reflow so the animation can restart
-    el.classList.add('pd-intro');
+    el.classList.add('pd-anim');
+    if(full) el.classList.add('pd-intro');
     clearTimeout(introTimer);
-    introTimer=setTimeout(function(){ el.classList.remove('pd-intro'); }, 1400);
+    introTimer=setTimeout(function(){ el.classList.remove('pd-anim','pd-intro'); }, 1400);
   }
 
   window.renderProgressDash=function(){
@@ -2170,7 +2178,7 @@ async function endAISession(){
       if(!myLogs().length){document.getElementById('pdash').style.display='none';return;}
       document.getElementById('pdash').style.display='';
       drawCards();drawChart();drawWeeks();
-      playIntro();
+      playIntro(true);      // opening the tab: animate everything
     }catch(e){ /* never let the dashboard break the history list */ }
   };
 
