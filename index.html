@@ -1947,6 +1947,41 @@ async function endAISession(){
   .pdash-dot{border-radius:50%;background:var(--green)}
   .pdash-dot.z{width:4px;height:4px;background:var(--border)}
   .pdash-note{font-size:11px;color:var(--muted);text-align:center;margin-top:8px}
+
+  /* ── Intro animation ──────────────────────────────────────────────
+     Only runs while #pdash carries .pd-intro, added on the first render of a
+     session and stripped ~1.3s later. Re-animating on every visit to My
+     History gets irritating fast and delays a returning client from simply
+     reading their numbers.
+     Bars use transform:scaleY rather than animating height — transform is
+     composited on the GPU, whereas height forces a layout recalculation every
+     frame, which is what makes charts feel janky on older phones. */
+  @keyframes pdGrow{ from{transform:scaleY(0)} to{transform:scaleY(1)} }
+  @keyframes pdRise{ from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
+  @keyframes pdFade{ from{opacity:0} to{opacity:1} }
+  @keyframes pdDraw{ from{stroke-dashoffset:1} to{stroke-dashoffset:0} }
+
+  /* Anyone with "Reduce Motion" enabled in iOS/macOS accessibility settings
+     gets the finished chart instantly, with no movement at all. */
+  @media (prefers-reduced-motion: no-preference){
+    .pd-intro .pdbar{
+      transform-box:fill-box; transform-origin:50% 100%;
+      animation:pdGrow .5s cubic-bezier(.2,.8,.3,1) backwards;
+    }
+    .pd-intro .pdline{ stroke-dasharray:1; animation:pdDraw .75s cubic-bezier(.4,0,.2,1) backwards }
+    .pd-intro .pdfade{ animation:pdFade .5s ease-out .3s backwards }
+    .pd-intro .pdash-m{ animation:pdRise .45s cubic-bezier(.2,.7,.3,1) backwards }
+    .pd-intro .pdash-m:nth-child(1){animation-delay:.30s}
+    .pd-intro .pdash-m:nth-child(2){animation-delay:.36s}
+    .pd-intro .pdash-m:nth-child(3){animation-delay:.42s}
+    .pd-intro .pdash-m:nth-child(4){animation-delay:.48s}
+    .pd-intro .pdash-row{ animation:pdRise .4s ease-out backwards }
+    .pd-intro .pdash-row:nth-child(1){animation-delay:.44s}
+    .pd-intro .pdash-row:nth-child(2){animation-delay:.50s}
+    .pd-intro .pdash-row:nth-child(3){animation-delay:.56s}
+    .pd-intro .pdash-row:nth-child(4){animation-delay:.62s}
+    .pd-intro .pdash-row:nth-child(5){animation-delay:.68s}
+  }
 </style>
 <script>
 (function(){
@@ -2026,19 +2061,19 @@ async function endAISession(){
       '<stop offset="1" stop-color="'+met.color+'" stop-opacity="0"/></linearGradient></defs>';
 
     const prevPts=path(prevS);
-    if(prevPts) s+='<polyline fill="none" stroke="#b9c2b0" stroke-width="2" stroke-dasharray="1 4" stroke-linecap="round" points="'+prevPts+'"/>';
+    if(prevPts) s+='<polyline class="pdfade" fill="none" stroke="#b9c2b0" stroke-width="2" stroke-dasharray="1 4" stroke-linecap="round" points="'+prevPts+'"/>';
 
     const pts=path(curS);
     if(pts){
       const firstX=pts.split(' ')[0].split(',')[0];
-      s+='<polygon fill="url(#pdg)" points="'+firstX+','+ly(0)+' '+pts+' '+xs(curS.length-1)+','+ly(0)+'"/>';
-      s+='<polyline fill="none" stroke="'+met.color+'" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points="'+pts+'"/>';
+      s+='<polygon class="pdfade" fill="url(#pdg)" points="'+firstX+','+ly(0)+' '+pts+' '+xs(curS.length-1)+','+ly(0)+'"/>';
+      s+='<polyline class="pdline" pathLength="1" fill="none" stroke="'+met.color+'" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points="'+pts+'"/>';
       const last=curS.filter(v=>v!==null);
       const ev=last[last.length-1],ex=xs(curS.length-1),ey=ly(ev);
-      s+='<line x1="'+ex+'" y1="'+ey+'" x2="'+ex+'" y2="'+baseY+'" stroke="'+met.color+'" stroke-width="1" opacity=".3"/>';
-      s+='<circle cx="'+ex+'" cy="'+ey+'" r="5" fill="#fff" stroke="'+met.color+'" stroke-width="3"/>';
-      s+='<text x="'+(W-2)+'" y="'+(ey+2)+'" text-anchor="end" font-size="11" font-weight="800" fill="'+met.color+'">'+met.fmt(ev)+met.ax+'</text>';
-      s+='<text x="'+(W-2)+'" y="'+(ey+12)+'" text-anchor="end" font-size="7.5" font-weight="700" letter-spacing=".5" fill="var(--muted)">'+(met.avg?'MONTH AVG':'MONTH TOTAL')+'</text>';
+      s+='<line class="pdfade" x1="'+ex+'" y1="'+ey+'" x2="'+ex+'" y2="'+baseY+'" stroke="'+met.color+'" stroke-width="1" opacity=".3"/>';
+      s+='<circle class="pdfade" cx="'+ex+'" cy="'+ey+'" r="5" fill="#fff" stroke="'+met.color+'" stroke-width="3"/>';
+      s+='<text class="pdfade" x="'+(W-2)+'" y="'+(ey+2)+'" text-anchor="end" font-size="11" font-weight="800" fill="'+met.color+'">'+met.fmt(ev)+met.ax+'</text>';
+      s+='<text class="pdfade" x="'+(W-2)+'" y="'+(ey+12)+'" text-anchor="end" font-size="7.5" font-weight="700" letter-spacing=".5" fill="var(--muted)">'+(met.avg?'MONTH AVG':'MONTH TOTAL')+'</text>';
     }
 
     // weekly bars — that week's average per logged day
@@ -2052,10 +2087,10 @@ async function endAISession(){
     const maxB=Math.max(...wk.map(w=>w.v),1)*1.15,bw=34,gap=(W-PL-PR-4*bw)/5;
     wk.forEach((w,i)=>{
       const bx=PL+gap+i*(bw+gap),bh=w.v/maxB*barH,last=i===3;
-      s+='<rect x="'+bx+'" y="'+(baseY-bh)+'" width="'+bw+'" height="'+Math.max(bh,1)+'" rx="5" fill="'+met.color+'" opacity="'+(last?1:.45)+'"/>';
+      s+='<rect class="pdbar" style="animation-delay:'+(0.1+i*0.07).toFixed(2)+'s" x="'+bx+'" y="'+(baseY-bh)+'" width="'+bw+'" height="'+Math.max(bh,1)+'" rx="5" fill="'+met.color+'" opacity="'+(last?1:.45)+'"/>';
       s+='<text x="'+(bx+bw/2)+'" y="'+(baseY+13)+'" text-anchor="middle" font-size="10" font-weight="'+(last?700:500)+'" fill="'+(last?met.color:'var(--muted)')+'">'+w.lab+'</text>';
       if(last&&w.v>0){
-        s+='<line x1="'+PL+'" y1="'+(baseY-bh)+'" x2="'+(W-PR+4)+'" y2="'+(baseY-bh)+'" stroke="'+met.color+'" stroke-width="1" opacity=".3"/>';
+        s+='<line class="pdfade" x1="'+PL+'" y1="'+(baseY-bh)+'" x2="'+(W-PR+4)+'" y2="'+(baseY-bh)+'" stroke="'+met.color+'" stroke-width="1" opacity=".3"/>';
         s+='<text x="'+(W-2)+'" y="'+(baseY-bh+2)+'" text-anchor="end" font-size="11" font-weight="800" fill="'+met.color+'">'+met.fmt(w.v)+met.ax+'</text>';
         s+='<text x="'+(W-2)+'" y="'+(baseY-bh+12)+'" text-anchor="end" font-size="7.5" font-weight="700" letter-spacing=".5" fill="var(--muted)">THIS WEEK</text>';
       }
@@ -2112,6 +2147,18 @@ async function endAISession(){
     document.getElementById('pdash-weeks').innerHTML=html;
   }
 
+  /* First render of the session only. Switching metric redraws the chart but
+     deliberately doesn't replay this — the colour change is enough. */
+  let introPlayed=false;
+  function playIntro(){
+    if(introPlayed) return;
+    introPlayed=true;
+    const el=document.getElementById('pdash');
+    if(!el) return;
+    el.classList.add('pd-intro');
+    setTimeout(function(){ el.classList.remove('pd-intro'); }, 1300);
+  }
+
   window.renderProgressDash=function(){
     try{
       ensureDom();
@@ -2119,6 +2166,7 @@ async function endAISession(){
       if(!myLogs().length){document.getElementById('pdash').style.display='none';return;}
       document.getElementById('pdash').style.display='';
       drawCards();drawChart();drawWeeks();
+      playIntro();
     }catch(e){ /* never let the dashboard break the history list */ }
   };
 
