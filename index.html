@@ -377,7 +377,7 @@
             <input type="date" id="f-date">
           </div>
           <div class="field">
-            <label id="lbl-water">💧 Water — target 2.5L (15pts)</label>
+            <label>💧 Water — target 2.5L (15pts)</label>
             <select id="f-water" onchange="updateProgress()">
               <option value="0">Select litres...</option>
               <option value="1">Under 1L</option>
@@ -392,7 +392,7 @@
 
         <div class="habit-grid">
           <div class="field">
-            <label id="lbl-sleep">😴 Sleep — target 8hrs (15pts)</label>
+            <label>😴 Sleep — target 8hrs (15pts)</label>
             <select id="f-sleep" onchange="updateProgress()">
               <option value="0">Select hours...</option>
               <option value="4">Under 5 hrs</option>
@@ -404,7 +404,7 @@
             </select>
           </div>
           <div class="field">
-            <label id="lbl-steps">👟 Steps — target 8,000 (15pts)</label>
+            <label>👟 Steps — target 8-10k (15pts)</label>
             <select id="f-steps" onchange="updateProgress()">
               <option value="0">Select steps...</option>
               <option value="2000">Under 2,000</option>
@@ -419,7 +419,7 @@
 
         <div class="habit-grid">
           <div class="field">
-            <label id="lbl-fv">🥦 Fruit &amp; Veg — target 5 portions (15pts)</label>
+            <label>🥦 Fruit &amp; Veg — target 5 portions (15pts)</label>
             <select id="f-fruitsVeg" onchange="updateProgress()">
               <option value="0">Select portions...</option>
               <option value="1">1 portion</option>
@@ -575,37 +575,6 @@ const STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/9B6dRa7yL2Dcd100i02Fa00';
    Leave blank to hide the link until the portal is activated. */
 const STRIPE_CUSTOMER_PORTAL_LINK = 'https://billing.stripe.com/p/login/9B6dRa7yL2Dcd100i02Fa00';
 
-/* Per-client habit targets, fetched on login. Defaults are what the app has
-   always used, so anything that fails to load simply scores as before. */
-const DEFAULT_TARGETS = { water:2.5, sleep:8, steps:8000, fv:5 };
-let myTargets = Object.assign({}, DEFAULT_TARGETS);
-
-async function loadTargets(){
-  if(!currentEmail) return;
-  try{
-    const res = await fetchT(SCRIPT_URL+'?action=getMyTargets&email='+encodeURIComponent(currentEmail),{},8000);
-    const t = await res.json();
-    if(t && typeof t === 'object'){
-      ['water','sleep','steps','fv'].forEach(function(k){
-        const v = parseFloat(t[k]);
-        if(!isNaN(v) && v > 0) myTargets[k] = v;
-      });
-    }
-  }catch(e){ /* keep defaults — never block logging on this */ }
-  applyTargetLabels();
-  updateProgress();
-}
-
-/* The form labels are the only place a client sees their target, so they
-   have to match what they're actually being scored against. */
-function applyTargetLabels(){
-  const set=function(id,txt){ const el=document.getElementById(id); if(el) el.innerHTML=txt; };
-  set('lbl-water', '💧 Water — target '+myTargets.water+'L (15pts)');
-  set('lbl-sleep', '😴 Sleep — target '+myTargets.sleep+'hrs (15pts)');
-  set('lbl-steps', '👟 Steps — target '+Number(myTargets.steps).toLocaleString()+' (15pts)');
-  set('lbl-fv',    '🥦 Fruit &amp; Veg — target '+myTargets.fv+' portions (15pts)');
-}
-
 let currentTier = 'free';
 /* Pro was only ever discovered as a side-effect of an AI Coach reply
    (data.tier inside callAICoach), so on every page load a paying client
@@ -651,47 +620,40 @@ let coachFilter = 'all';
 // Protein = 15pts, No Alcohol = 15pts, Exercise = 10pts
 // Perfect: 15+15+15+15+15+15+10 = 100 ✓
 
-/* Each habit keeps its existing band SHAPE; only the thresholds move,
-   scaled by target ÷ default. At the default target every score is
-   identical to before — backward compatible by construction, not by luck.
-   Verified across every dropdown value before shipping. */
-function scoreWater(v, target) {
-  const t = target || myTargets.water || DEFAULT_TARGETS.water;
+function scoreWater(v) {
   const l = parseFloat(v||0);
-  if(l <= 0)            return 0;
-  if(l < t * 0.6)       return 4;
-  if(l < t * 0.8)       return 8;
-  if(l < t)             return 12;
+  if(l <= 0)   return 0;
+  if(l < 1.5)  return 4;
+  if(l < 2)    return 8;
+  if(l < 2.5)  return 12;
   return 15;
 }
-function scoreSleep(v, target) {
-  const t = target || myTargets.sleep || DEFAULT_TARGETS.sleep;
+function scoreSleep(v) {
   const h = parseFloat(v||0);
-  if(h <= 0)              return 0;
-  if(h < t * 0.625)       return 0;
-  if(h < t * 0.75)        return 4;
-  if(h < t * 0.875)       return 7;
-  if(h < t)               return 11;
-  if(h < t * 1.125)       return 14;
+  if(h <= 0)  return 0;
+  if(h < 5)   return 0;
+  if(h < 6)   return 4;
+  if(h < 7)   return 7;
+  if(h < 8)   return 11;
+  if(h < 9)   return 14;
   return 15;
 }
-function scoreSteps(v, target) {
-  const t = target || myTargets.steps || DEFAULT_TARGETS.steps;
+function scoreSteps(v) {
   const s = parseInt(v||0);
-  if(s <= 0)          return 0;
-  if(s < t * 0.5)     return 4;
-  if(s < t * 0.75)    return 8;
-  if(s < t)           return 12;
+  if(s <= 0)     return 0;
+  if(s < 4000)   return 4;
+  if(s < 6000)   return 8;
+  if(s < 8000)   return 12;
+  if(s <= 10000) return 15;
   return 15;
 }
-function scoreFV(v, target) {
-  const t = target || myTargets.fv || DEFAULT_TARGETS.fv;
+function scoreFV(v) {
   const p = parseInt(v||0);
-  if(p <= 0)          return 0;
-  if(p < t * 0.4)     return 4;
-  if(p < t * 0.6)     return 7;
-  if(p < t * 0.8)     return 10;
-  if(p < t)           return 13;
+  if(p <= 0) return 0;
+  if(p < 2)  return 4;
+  if(p < 3)  return 7;
+  if(p < 4)  return 10;
+  if(p < 5)  return 13;
   return 15;
 }
 
@@ -708,15 +670,6 @@ function calcLiveScore() {
 }
 
 function calcLogScore(log) {
-  /* Scores used to be recomputed from raw values every time anything
-     rendered — which meant changing someone's target would silently rescore
-     their entire history, turning old 94s into 81s with no explanation.
-     The score written at save time is now the record. Only compute when
-     it's genuinely missing (pre-migration rows). Audited before switching:
-     37 of 39 stored scores matched the computed value, 0 mismatches. */
-  const stored = parseFloat(log['Score']);
-  if(!isNaN(stored) && stored > 0 && stored <= 100) return Math.round(stored);
-
   let s = 0;
   s += scoreWater(log['Water (L)']);
   s += scoreSleep(log['Sleep (hrs)']);
@@ -818,7 +771,6 @@ function showApp() {
   document.getElementById('nav-user').style.display='flex';
   document.getElementById('nav-user-name').textContent=currentUser;
   document.getElementById('f-date').value=today();
-  loadTargets();                       // labels + today's scoring
   loadLogs().then(prefillFromLastLog);
 }
 
@@ -1839,8 +1791,6 @@ async function openAICoachTab(){
   aiSystemPrompt=`You are the Lean Comp Nutrition coach, texting ${currentUser} directly for their check-in.
 Voice: direct, warm, no corporate fluff, like a real coach who knows this client's numbers. Short messages, 2-4 sentences max.
 Never invent a statistic that is not in the data below. If you don't have a number, don't guess it.
-
-${currentUser}'s targets: water ${myTargets.water}L, sleep ${myTargets.sleep}h, steps ${myTargets.steps}, fruit/veg ${myTargets.fv} portions. Coach against THESE, not generic advice.
 
 ${currentUser}'s real data:
 - Current streak: ${a.streak} days
