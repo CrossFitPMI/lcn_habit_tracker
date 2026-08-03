@@ -2178,11 +2178,13 @@ async function endAISession(){
 
   /* Anyone with "Reduce Motion" enabled in iOS/macOS accessibility settings
      gets the finished chart instantly, with no movement at all. */
-  /* .pd-anim  = chart + metric cards. Replays every time the metric changes.
-     .pd-intro = additionally the weekly dot table. Only on opening the tab,
-                 because the dot data doesn't change when you switch metric —
-                 re-animating it would draw the eye to something that hasn't
-                 actually moved. */
+  /* .pd-anim  = the chart only. Replays every time the metric changes,
+                 because the chart genuinely redraws with different data.
+     .pd-intro = the metric cards and the weekly dot table as well. Only on
+                 opening the tab. Neither of those changes meaningfully when
+                 you switch metric — the cards just swap which one is
+                 highlighted — so re-animating them draws the eye to
+                 something that hasn't actually moved. */
   @media (prefers-reduced-motion: no-preference){
     .pd-anim .pdbar{
       transform-box:fill-box; transform-origin:50% 100%;
@@ -2190,11 +2192,11 @@ async function endAISession(){
     }
     .pd-anim .pdline{ stroke-dasharray:1; animation:pdDraw .75s cubic-bezier(.4,0,.2,1) backwards }
     .pd-anim .pdfade{ animation:pdFade .5s ease-out .3s backwards }
-    .pd-anim .pdash-m{ animation:pdRise .45s cubic-bezier(.2,.7,.3,1) backwards }
-    .pd-anim .pdash-m:nth-child(1){animation-delay:.30s}
-    .pd-anim .pdash-m:nth-child(2){animation-delay:.36s}
-    .pd-anim .pdash-m:nth-child(3){animation-delay:.42s}
-    .pd-anim .pdash-m:nth-child(4){animation-delay:.48s}
+    .pd-intro .pdash-m{ animation:pdRise .45s cubic-bezier(.2,.7,.3,1) backwards }
+    .pd-intro .pdash-m:nth-child(1){animation-delay:.30s}
+    .pd-intro .pdash-m:nth-child(2){animation-delay:.36s}
+    .pd-intro .pdash-m:nth-child(3){animation-delay:.42s}
+    .pd-intro .pdash-m:nth-child(4){animation-delay:.48s}
     .pd-intro .pdash-row{ animation:pdRise .4s ease-out backwards }
     .pd-intro .pdash-row:nth-child(1){animation-delay:.44s}
     .pd-intro .pdash-row:nth-child(2){animation-delay:.50s}
