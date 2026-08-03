@@ -885,7 +885,10 @@ async function loadLogs(force){
 
   logsPromise = (async () => {
     try{
-      const res=await fetchT(SCRIPT_URL+'?action=getLogs',{},12000);
+      /* Scoped to this client. The old getLogs handed every client's rows —
+         names, emails and free-text notes — to any caller. */
+      const res=await fetchT(SCRIPT_URL+'?action=getMyLogs&email='+encodeURIComponent(currentEmail)+
+                             '&name='+encodeURIComponent(currentUser),{},12000);
       const data=await res.json();
       allLogs=(Array.isArray(data)?data:[]).map(l=>({...l,'Date':normalizeDateStr(l['Date'])}));
       logsFetchedAt=Date.now();
@@ -942,8 +945,17 @@ function setCoachFilter(f,btn){
   renderCoachView();
 }
 
-function renderCoachView(){
-  let logs=[...allLogs];
+let coachAllLogs=[];
+async function renderCoachView(){
+  if(!coachUnlocked) return;
+  if(!coachAllLogs.length){
+    try{
+      const res=await fetchT(SCRIPT_URL+'?action=coachLogs&pin='+encodeURIComponent(coachPin),{},15000);
+      const data=await res.json();
+      coachAllLogs=Array.isArray(data)?data.map(l=>({...l,'Date':normalizeDateStr(l['Date'])})):[];
+    }catch(err){ coachAllLogs=[]; }
+  }
+  let logs=[...coachAllLogs];
   if(coachFilter==='today'){const t=today();logs=logs.filter(l=>l['Date']===t);}
   else if(coachFilter==='week'){
     const mon=new Date();mon.setDate(mon.getDate()-mon.getDay()+1);mon.setHours(0,0,0,0);
@@ -999,9 +1011,12 @@ function formatDate(d){
 
 
 // ── PIN PROTECTION ──
-const COACH_PIN = '5143'; // ← CHANGE THIS to your own PIN
+/* The PIN now lives in Apps Script Script Properties, not here — a constant
+   in this file is readable by anyone who views source. Set it by running
+   setCoachPin() in the Apps Script editor. */
 let pinEntry = '';
 let coachUnlocked = false;
+let coachPin = '';        // held in memory only for the session, never stored
 
 function showPinModal() {
   pinEntry = '';
@@ -1047,9 +1062,20 @@ function updatePinDots() {
     dot.className = 'pin-dot' + (i < pinEntry.length ? ' filled' : '');
   }
 }
-function checkPin() {
-  if(pinEntry === COACH_PIN) {
+async function checkPin() {
+  /* The PIN used to be a constant in this file, so anyone who viewed source
+     could read it — and every client's data was already in the browser
+     regardless. Now the PIN is verified by Apps Script, and the full dataset
+     is only sent back if it checks out. */
+  let ok=false;
+  try{
+    const res=await fetchT(SCRIPT_URL+'?action=checkCoachPin&pin='+encodeURIComponent(pinEntry),{},10000);
+    ok=(await res.json()).ok===true;
+  }catch(err){ ok=false; }
+
+  if(ok) {
     coachUnlocked = true;
+    coachPin = pinEntry;
     hidePinModal();
     document.getElementById('tab-coach').style.display = 'block';
     renderCoachView();
@@ -1069,7 +1095,9 @@ if(savedName && savedEmail){currentUser=savedName;currentEmail=savedEmail;showAp
 // by email where present, falling back to name for pre-email rows. Hidden
 // preferences come from the Apps Script prefs sheet.
 
-let lbPrefs=[];
+/* lbPrefs used to hold every client's email + hidden flag. The board is now
+   built server-side and only this client's own preference is fetched, so
+   there's nothing to cache here any more. */
 
 function calcStreakFromLogs(logs){
   const dates=[...new Set(logs.map(l=>String(l['Date']).slice(0,10)))].sort().reverse();
@@ -1101,30 +1129,21 @@ function calcBestStreak(logs){
 async function renderStreaks(){
   /* These two Apps Script calls used to run one after the other, so the tab
      waited on two cold round trips before drawing anything. */
+  /* The board is now built on the server and arrives as names + streak
+     numbers only — no emails, dates, notes or scores. Hidden clients are
+     dropped server-side too; "hidden" used to mean merely "not drawn",
+     while their data still reached every other client's device. */
   const results = await Promise.all([
     loadLogs(),
-    fetchT(SCRIPT_URL+'?action=getPrefs',{},10000).then(r=>r.json()).catch(()=>[])
+    fetchT(SCRIPT_URL+'?action=getLeaderboard&me='+encodeURIComponent(currentEmail)+
+           '&meName='+encodeURIComponent(currentUser),{},10000).then(r=>r.json()).catch(()=>[]),
+    fetchT(SCRIPT_URL+'?action=getMyPrefs&email='+encodeURIComponent(currentEmail),{},10000)
+           .then(r=>r.json()).catch(()=>({hidden:false}))
   ]);
-  lbPrefs = Array.isArray(results[1]) ? results[1] : [];
+  const entries = Array.isArray(results[1]) ? results[1] : [];
+  const myPrefs = results[2] || {hidden:false};
 
-  const meHidden=lbPrefs.some(p=>p.email===currentEmail&&p.hidden);
-  document.getElementById('lb-hide-toggle').checked=meHidden;
-
-  // Group logs per identity: email where present, else name.
-  const groups={};
-  const normalized=allLogs.map(normalizeAILog);
-  normalized.forEach(l=>{
-    const email=(l['Client Email']||'').toLowerCase();
-    const key=email||('name:'+(l['Client Name']||''));
-    if(!groups[key]) groups[key]={email,name:l['Client Name']||'—',logs:[]};
-    groups[key].logs.push(l);
-    if(l['Client Name']) groups[key].name=l['Client Name']; // keep most recent name
-  });
-
-  const entries=Object.values(groups)
-    .map(g=>({...g,streak:calcStreakFromLogs(g.logs),best:calcBestStreak(g.logs),
-      hidden:g.email?lbPrefs.some(p=>p.email===g.email&&p.hidden):false,
-      isMe:g.email?g.email===currentEmail:g.name===currentUser}));
+  document.getElementById('lb-hide-toggle').checked = !!myPrefs.hidden;
 
   const active=entries.filter(g=>g.streak>0);
   const visible=active.filter(g=>!g.hidden).sort((a,b)=>b.streak-a.streak).slice(0,10);
@@ -1248,10 +1267,8 @@ function renderBadges(){
 }
 
 async function setLeaderboardHidden(hidden){
-  // Optimistic update; persists via the Apps Script prefs sheet.
-  const existing=lbPrefs.find(p=>p.email===currentEmail);
-  if(existing) existing.hidden=hidden;
-  else lbPrefs.push({email:currentEmail,hidden});
+  // Optimistic: flip the toggle immediately, persist, then re-read the board.
+  document.getElementById('lb-hide-toggle').checked=hidden;
   try{
     await fetch(SCRIPT_URL,{method:'POST',mode:'no-cors',
       headers:{'Content-Type':'text/plain'},
