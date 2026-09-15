@@ -771,6 +771,10 @@ function showApp() {
   document.getElementById('nav-user').style.display='flex';
   document.getElementById('nav-user-name').textContent=currentUser;
   document.getElementById('f-date').value=today();
+  /* Greys out tomorrow onward in the picker. The server rejects future dates
+     too, but POSTs go out no-cors so that error can never be read here —
+     this is what the client actually experiences. */
+  document.getElementById('f-date').max=today();
   loadLogs().then(prefillFromLastLog);
 }
 
