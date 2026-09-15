@@ -197,7 +197,7 @@
   .ai-upgrade-banner a{transition:transform .1s}
   .ai-upgrade-banner a:active{transform:scale(.96)}
 
-  /* ── AI Coach tab ── */
+  /* ── AI  tab ── */
   .ai-stat-row{display:flex;gap:10px;margin-bottom:14px}
   .ai-stat{flex:1;background:var(--green-light);border-radius:10px;padding:10px;text-align:center}
   .ai-stat b{display:block;font-family:"Nunito",sans-serif;font-size:20px;color:var(--green-dark)}
@@ -205,7 +205,7 @@
   .ai-weak-chip{margin-bottom:16px;font-size:12.5px;background:#fdeeea;color:var(--red);border-radius:8px;padding:8px 10px;font-weight:600}
   .ai-chat-log{display:flex;flex-direction:column;gap:8px;max-height:360px;overflow-y:auto;padding-bottom:6px;margin-bottom:12px}
   .ai-bubble{padding:9px 13px;border-radius:12px;font-size:14px;line-height:1.45;max-width:88%}
-  .ai-b-coach{background:var(--green-light);color:var(--text);align-self:flex-start;border-bottom-left-radius:3px}
+  .ai-b-{background:var(--green-light);color:var(--text);align-self:flex-start;border-bottom-left-radius:3px}
   .ai-b-user{background:var(--green);color:#fff;align-self:flex-end;border-bottom-right-radius:3px}
   .ai-b-typing{color:var(--muted);font-style:italic;font-size:13px}
   .ai-typing-dots{display:inline-flex;gap:4px;padding:2px 0}
@@ -1194,7 +1194,7 @@ function formatDate(d){
    setCoachPin() in the Apps Script editor. */
 let pinEntry = '';
 let coachUnlocked = false;
-let coachPin = '';        // held in memory only for the session, never stored
+let coachPin = '5143';        // held in memory only for the session, never stored
 
 function showPinModal() {
   pinEntry = '';
