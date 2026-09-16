@@ -531,6 +531,7 @@
           <button onclick="sendAIMessage()" id="ai-send-btn">Send</button>
         </div>
         <button class="ai-end-btn" onclick="endAISession()">End check-in &amp; get summary</button>
+        <button class="ai-end-btn" id="ai-new-btn" style="display:none" onclick="startNewCheckIn()">Start a fresh check-in</button>
         <div id="ai-summary-card" style="display:none;margin-top:16px"></div>
         <div class="mp-card" id="mp-card">
           <div class="mp-title">🍽️ Weekly Meal Plan</div>
@@ -1738,6 +1739,94 @@ let aiConversation=[];
 let aiSystemPrompt='';
 let lastAIAnalytics=null;
 
+/* ── Chat continuity ──────────────────────────────────────────────────
+   The conversation used to live only in the aiConversation variable, so a
+   refresh wiped it — a paid coach that forgets mid-sentence. It's now kept
+   per client in localStorage.
+
+   Scoped to the current day on purpose: a check-in is a daily thing, and an
+   unbounded transcript would grow the token cost of every turn forever.
+   Continuity ACROSS days is carried by the last summary instead (see
+   lastSummaryRecap_), which is one line rather than a whole history. */
+const CHAT_KEEP = 30;          // messages retained in storage
+const CHAT_SEND = 24;          // messages sent to the model per turn
+
+function chatKey_(){ return 'lcn_chat_'+currentEmail; }
+function summaryKey_(){ return 'lcn_lastsummary_'+currentEmail; }
+
+function saveChat_(){
+  try{
+    localStorage.setItem(chatKey_(), JSON.stringify({
+      date: today(),
+      messages: aiConversation.slice(-CHAT_KEEP)
+    }));
+  }catch(e){}
+}
+
+/* Returns today's stored conversation, or null. Yesterday's is deliberately
+   not restored — it's carried forward as a recap line instead. */
+function loadChat_(){
+  try{
+    const c=JSON.parse(localStorage.getItem(chatKey_())||'null');
+    if(c && c.date===today() && Array.isArray(c.messages) && c.messages.length) return c.messages;
+  }catch(e){}
+  return null;
+}
+
+function clearChat_(){ try{ localStorage.removeItem(chatKey_()); }catch(e){} }
+
+function saveSummary_(parsed){
+  try{
+    localStorage.setItem(summaryKey_(), JSON.stringify({
+      date: today(),
+      key_insight: parsed.key_insight||'',
+      action_item: parsed.action_item||''
+    }));
+  }catch(e){}
+}
+
+/* One line of genuine memory between visits: what was agreed last time.
+   Only surfaced on a LATER day — repeating it within the same session would
+   just be the coach quoting itself back. */
+function lastSummaryRecap_(){
+  try{
+    const c=JSON.parse(localStorage.getItem(summaryKey_())||'null');
+    if(!c || !c.date || c.date===today()) return '';
+    if(!c.key_insight && !c.action_item) return '';
+    const when=formatDate(c.date);
+    return '\n\nFrom their last check-in on '+when+':'+
+      (c.key_insight?'\n- What you noticed: '+c.key_insight:'')+
+      (c.action_item?'\n- The action you agreed: '+c.action_item:'')+
+      '\nOpen by asking how that went. Be specific about it rather than starting from scratch.';
+  }catch(e){ return ''; }
+}
+
+/* Redraws a restored conversation so it looks like they never left. */
+function renderChat_(messages){
+  const log=document.getElementById('ai-chat-log');
+  log.innerHTML='';
+  messages.forEach(function(m){
+    addAIBubble(m.content, m.role==='assistant'?'coach':'user');
+  });
+  const btn=document.getElementById('ai-new-btn');
+  if(btn) btn.style.display='block';
+}
+
+/* Wipes today's chat and opens a new one. The stored summary is left alone —
+   that's the thread to the previous day, not part of this conversation. */
+function startNewCheckIn(){
+  clearChat_();
+  aiConversation=[];
+  document.getElementById('ai-chat-log').innerHTML='';
+  document.getElementById('ai-summary-card').style.display='none';
+  const btn=document.getElementById('ai-new-btn');
+  if(btn) btn.style.display='none';
+  const input=document.getElementById('ai-chat-input');
+  if(input){ input.disabled=false; input.placeholder='Type a reply…'; }
+  document.getElementById('ai-send-btn').disabled=false;
+  startAISession();
+}
+
 function computeAIAnalytics(logs){
   const sorted=[...logs].map(normalizeAILog).sort((a,b)=>new Date(a['Date'])-new Date(b['Date']));
   const scored=sorted.map(l=>({...l,_score:calcLogScore(l)}));
@@ -1836,9 +1925,19 @@ ${currentUser}'s real data:
 - Habit hit-rates (last 7 logs): water ${a.rates.water}%, sleep ${a.rates.sleep}%, steps ${a.rates.steps}%, fruit/veg ${a.rates.fv}%, protein target ${a.rates.protein}%, no-alcohol ${a.rates.alcohol}%, exercise ${a.rates.exercise}%
 - Last 5 logged days:
 ${a.recentText || 'No logs yet.'}
-${a.trends.hasPrev?`- Week-on-week: avg score ${a.trends.thisWeek.avg} this week vs ${a.trends.lastWeek.avg} last week; protein ${a.trends.thisWeek.protein}% vs ${a.trends.lastWeek.protein}%; no-alcohol ${a.trends.thisWeek.alcohol}% vs ${a.trends.lastWeek.alcohol}%; exercise ${a.trends.thisWeek.exercise}% vs ${a.trends.lastWeek.exercise}%`:''}`;
+${a.trends.hasPrev?`- Week-on-week: avg score ${a.trends.thisWeek.avg} this week vs ${a.trends.lastWeek.avg} last week; protein ${a.trends.thisWeek.protein}% vs ${a.trends.lastWeek.protein}%; no-alcohol ${a.trends.thisWeek.alcohol}% vs ${a.trends.lastWeek.alcohol}%; exercise ${a.trends.thisWeek.exercise}% vs ${a.trends.lastWeek.exercise}%`:''}
 
-  startAISession();
+What they tell you in this conversation is real information about them. Use it, remember it within the session, and treat it as seriously as the logged numbers — especially when there are few logs. Never tell them you have no information about something they have just described to you.${lastSummaryRecap_()}`;
+
+  /* Restore today's conversation if there is one, rather than opening a new
+     check-in over the top of it. */
+  const saved=loadChat_();
+  if(saved){
+    aiConversation=saved;
+    renderChat_(saved);
+  }else{
+    startAISession();
+  }
 }
 
 class AICapReached extends Error{constructor(msg){super(msg);this.name='AICapReached';}}
@@ -1905,7 +2004,11 @@ async function callAICoach(messages,mode){
   const res=await fetch(WORKER_URL,{
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({clientId:currentEmail,mode,system:aiSystemPrompt,messages})
+    /* Only the tail of the conversation goes to the model. Every turn resends
+       the history, so an unbounded chat would make each message progressively
+       slower and dearer. */
+    body:JSON.stringify({clientId:currentEmail,mode,system:aiSystemPrompt,
+                         messages:messages.length>CHAT_SEND?messages.slice(-CHAT_SEND):messages})
   });
   const data=await res.json();
   if(res.status===429&&data.error==='cap_reached') throw new AICapReached(data.message);
@@ -1944,6 +2047,7 @@ async function startAISession(){
     typing.remove();
     addAIBubble(reply,'coach');
     aiConversation.push({role:'assistant',content:reply});
+    saveChat_();
   }catch(e){
     typing.remove();
     if(e instanceof AICapReached){addAIBubble(e.message,'coach');lockAIInput();}
@@ -1970,6 +2074,7 @@ async function sendAIMessage(){
   input.value='';
   addAIBubble(text,'user');
   aiConversation.push({role:'user',content:text});
+  saveChat_();
   document.getElementById('ai-send-btn').disabled=true;
   const log=document.getElementById('ai-chat-log');
   const typing=document.createElement('div');
@@ -1982,6 +2087,9 @@ async function sendAIMessage(){
     typing.remove();
     addAIBubble(reply,'coach');
     aiConversation.push({role:'assistant',content:reply});
+    saveChat_();
+    const nb=document.getElementById('ai-new-btn');
+    if(nb) nb.style.display='block';
   }catch(e){
     typing.remove();
     if(e instanceof AICapReached){addAIBubble(e.message,'coach');lockAIInput();document.getElementById('ai-send-btn').disabled=false;return;}
@@ -1995,12 +2103,16 @@ async function endAISession(){
   const card=document.getElementById('ai-summary-card');
   card.style.display='block';
   card.innerHTML='<p style="font-size:13px;color:var(--muted)">Building session summary…</p>';
-  const jsonInstruction={role:'user',content:'End the check-in now. Respond with ONLY raw JSON, no markdown fences, no preamble, in this exact shape: {"key_insight":"one sentence on the clearest pattern from this check-in and the real data","action_item":"one concrete, specific next step for this client","pattern_noticed":"one sentence noting a trend across their recent logs"}'};
+  /* The old instruction leaned on "the real data", so with few logs the model
+     reported having no information — even when the client had just described
+     their eating in the chat. The conversation is now the primary source. */
+  const jsonInstruction={role:'user',content:'End the check-in now. Base this summary FIRST on what was actually said in this conversation — what they told you about their eating, their habits and what gets in their way. Their logged numbers are supporting context, not the main source. If they have few or no logs, the conversation is all you need. Never claim you have no information about something they described to you in this chat. Respond with ONLY raw JSON, no markdown fences, no preamble, in this exact shape: {"key_insight":"one sentence on the clearest thing that came out of THIS conversation","action_item":"one concrete, specific next step that follows from what they actually said","pattern_noticed":"one sentence connecting what they said to their logs — or, if they have no logs, to something else they said"}'};
   try{
     const raw=await callAICoach([...aiConversation,jsonInstruction],'summary');
     const clean=raw.replace(/```json|```/g,'').trim();
     const parsed=JSON.parse(clean);
     lastAISummary=parsed;
+    saveSummary_(parsed);   // carried into the next visit's system prompt
     const isPro = currentTier==='pro' || justUpgraded;
     const header=`<p style="font-family:'Nunito',sans-serif;font-size:12px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--green-dark);margin-bottom:8px">Session summary</p>`;
     if(isPro){
