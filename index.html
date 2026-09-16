@@ -99,6 +99,18 @@
   .submit-btn{width:100%;background:var(--green);color:#fff;border:none;border-radius:10px;font-family:"Nunito",sans-serif;font-size:18px;font-weight:800;padding:14px;cursor:pointer;transition:background .2s;margin-top:4px}
   .submit-btn:hover{background:var(--green-dark)}
   .submit-btn:disabled{opacity:.5;cursor:not-allowed}
+  /* Saving state. Five different clients managed to double-save, which says
+     the old text-only "Saving..." wasn't visible enough on a phone — you tap,
+     nothing obvious happens for a second, so you tap again. This gives motion
+     and a colour change, not just different words. */
+  .submit-btn.saving{background:var(--green-dark);opacity:1;cursor:wait;
+    display:flex;align-items:center;justify-content:center;gap:10px}
+  .submit-btn.saving::before{content:"";width:18px;height:18px;flex-shrink:0;
+    border:3px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;
+    animation:btnspin .7s linear infinite}
+  @keyframes btnspin{to{transform:rotate(360deg)}}
+  .submit-btn.saved{background:var(--green-dark);opacity:1}
+  .status-msg{font-size:14px;font-weight:600;padding:13px}
   .status-msg{font-size:13px;text-align:center;padding:10px;border-radius:8px;margin-top:10px;display:none}
   .status-msg.success{background:rgba(90,158,47,.12);color:var(--green-dark);display:block}
   .status-msg.error{background:rgba(204,34,0,.10);color:var(--red);display:block}
@@ -808,6 +820,10 @@ function toggleHabit(h) {
    editing is which action the server is asked to perform. */
 let editingLogId='';
 
+/* Set for the whole duration of a save. The button's disabled attribute can
+   be beaten by a fast second tap before the browser repaints; this can't. */
+let savingLog=false;
+
 function setSelectIfPresent_(id,val){
   const el=document.getElementById(id);
   if(!el) return;
@@ -885,7 +901,22 @@ async function submitLog() {
   }
   const score=calcLiveScore();
   const btn=document.getElementById('submit-btn');
-  btn.disabled=true;btn.textContent='Saving...';
+
+  /* Belt and braces against a double tap. disabled alone can be beaten by a
+     fast second tap before the browser repaints. */
+  if(savingLog) return;
+  savingLog=true;
+
+  btn.disabled=true;
+  btn.classList.add('saving');
+  btn.textContent='Saving your log…';
+  /* If they've scrolled past the button, bring it back — the feedback is
+     useless where they can't see it. */
+  try{ btn.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){}
+  /* A short buzz on Android confirms the tap landed even before the network
+     does. Ignored on iOS, which is fine. */
+  try{ if(navigator.vibrate) navigator.vibrate(15); }catch(e){}
+
   try{
     const editing = !!editingLogId;
     await fetch(SCRIPT_URL,{method:'POST',mode:'no-cors',
@@ -916,26 +947,70 @@ async function submitLog() {
       document.getElementById('edit-banner').style.display='none';
       cancelEditLog();
       renderMyHistory();
-      btn.disabled=false;btn.textContent="✓ Save Today's Log";
+      resetSaveButton_(landed);
+      savingLog=false;
       return;
     }
 
-    const msg = score===100 ? '🏆 Perfect 100/100! Incredible day!' : 'Habits logged! Score: '+score+'/100 💪';
-    showStatus(msg,'success');
-    document.getElementById('f-water').value='0';
-    document.getElementById('f-sleep').value='0';
-    document.getElementById('f-steps').value='0';
-    document.getElementById('f-fruitsVeg').value='0';
-    document.getElementById('f-notes').value='';
-    habits={protein:false,alcohol:false,exercise:false};
-    ['protein','alcohol','exercise'].forEach(h=>{
-      document.getElementById('toggle-'+h).classList.remove('active');
-      document.getElementById('check-'+h).textContent='';
+    /* The add path used to announce success the moment the request went out.
+       POSTs are no-cors, so the response is unreadable and a total failure
+       looked exactly like a save. Now it re-reads the logs and confirms the
+       row is actually there — the same check the edit path already did. */
+    await new Promise(function(r){ setTimeout(r,1200); });
+    await loadLogs(true);
+    const saved=allLogs.find(function(x){
+      return String(x['Date']||'').slice(0,10)===date &&
+             String(x['Notes']||'')===notes &&
+             String(x['Water (L)'])===String(water||0);
     });
-    updateProgress();
-    setTimeout(()=>loadLogs(true),1500);   // bypass the cache — they just added a row
-  }catch(e){showStatus('Error saving. Check your connection.','error');}
-  btn.disabled=false;btn.textContent='✓ Save Today\'s Log';
+
+    if(saved){
+      const msg = score===100 ? '🏆 Perfect 100/100! Incredible day!' : 'Saved. Score: '+score+'/100 💪';
+      showStatus(msg,'success');
+      document.getElementById('f-water').value='0';
+      document.getElementById('f-sleep').value='0';
+      document.getElementById('f-steps').value='0';
+      document.getElementById('f-fruitsVeg').value='0';
+      document.getElementById('f-notes').value='';
+      habits={protein:false,alcohol:false,exercise:false};
+      ['protein','alcohol','exercise'].forEach(h=>{
+        document.getElementById('toggle-'+h).classList.remove('active');
+        document.getElementById('check-'+h).textContent='';
+      });
+      updateProgress();
+      renderMyHistory();
+    }else{
+      /* Deliberately not "try again" — the row may well have landed and just
+         not come back yet, and a blind retry is how duplicates used to start. */
+      showStatus("Sent, but it hasn't shown up yet. Check My History in a moment before saving again.",'error');
+    }
+    resetSaveButton_(!!saved);
+  }catch(e){
+    showStatus('Could not save — check your connection and try again.','error');
+    resetSaveButton_(false);
+  }
+  savingLog=false;
+}
+
+/* Restores the button after a save. On success it holds a tick for a couple
+   of seconds so the confirmation is unmissable, and stays disabled during
+   that window — a late second tap then does nothing at all. */
+function resetSaveButton_(ok){
+  const btn=document.getElementById('submit-btn');
+  btn.classList.remove('saving');
+  if(ok){
+    btn.classList.add('saved');
+    btn.textContent='✓ Saved';
+    try{ if(navigator.vibrate) navigator.vibrate([12,60,12]); }catch(e){}
+    setTimeout(function(){
+      btn.classList.remove('saved');
+      btn.disabled=false;
+      btn.textContent="✓ Save Today's Log";
+    },2200);
+  }else{
+    btn.disabled=false;
+    btn.textContent="✓ Save Today's Log";
+  }
 }
 
 function showStatus(msg,type){
