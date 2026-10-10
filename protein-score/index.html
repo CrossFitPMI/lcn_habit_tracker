@@ -560,18 +560,47 @@
             function(){ setStatus("The product database is busy right now. Wait a minute and try again, use the Barcode tab, or enter the label yourself.", true); })
       .then(function(){ searching = false; }, function(){ searching = false; });
   }
+  function fetchProduct(code){
+    // 404 means "not in the database" (still a valid reply); other errors mean it didn't answer
+    var ctrl = ("AbortController" in window) ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function(){ ctrl.abort(); }, 20000) : null;
+    return fetch("https://world.openfoodfacts.org/api/v2/product/" + code + ".json?fields=" + OFF_FIELDS, ctrl ? {signal: ctrl.signal} : {})
+      .then(function(r){
+        if(timer) clearTimeout(timer);
+        if(r.status === 404) return {notFound: true};
+        if(!r.ok) throw new Error("HTTP " + r.status);
+        return r.json().then(function(j){ return (j.status === 1 && j.product) ? {product: j.product} : {notFound: true}; });
+      });
+  }
+  function codeVariants(code){
+    var v = [code];
+    if(code.length === 12) v.push("0" + code);
+    if(code.length === 13 && code.charAt(0) === "0") v.push(code.slice(1));
+    if(code.length === 8 || code.length === 11) v.push("0" + code);
+    return v;
+  }
   function lookup(code){
-    code = (code || "").replace(/\D/g, ""); if(code.length < 6){ setStatus("That doesn't look like a full barcode.", true); return; }
+    code = (code || "").replace(/\D/g, ""); if(code.length < 8){ setStatus("That doesn't look like a full barcode. Check the digits under the bars.", true); return; }
     $("results").innerHTML = ""; setStatus("Looking up " + code + "…");
-    fetchJSON("https://world.openfoodfacts.org/api/v2/product/" + code + ".json?fields=" + OFF_FIELDS, 25000)
-      .then(function(j){
-        if(j.status !== 1 || !j.product){ setStatus("Product not found. Try searching by name, or enter the label yourself.", true); return; }
-        var n = nutr(j.product);
-        if(n.protein == null || n.kcal == null){ setStatus("Found it, but its nutrition data is incomplete. Please fill in the label below.", true); }
-        else setStatus("Found: " + pName(j.product));
-        fillFromOFF(j.product);
-      })
-      .catch(function(){ setStatus("Lookup isn't responding right now. Try again in a moment.", true); });
+    var variants = codeVariants(code), failed = false;
+    function tryVariant(i){
+      if(i >= variants.length) return Promise.resolve(null);
+      return fetchProduct(variants[i])
+        .catch(function(){ failed = true; return wait(2000).then(function(){ return fetchProduct(variants[i]); }); })
+        .then(function(res){ if(res && res.product) return res.product; return tryVariant(i + 1); },
+              function(){ failed = true; return tryVariant(i + 1); });
+    }
+    tryVariant(0).then(function(p){
+      if(!p){
+        if(failed) setStatus("The product database is busy right now. Try again in a minute, or enter the label yourself.", true);
+        else setStatus("This product isn't in the Open Food Facts database yet. Tap \u201cEnter label\u201d and type in the numbers from the pack.", true);
+        return;
+      }
+      var n = nutr(p);
+      if(n.protein == null || n.kcal == null) setStatus("Found it, but its nutrition data is incomplete. Please fill in the label below.", true);
+      else setStatus("Found: " + pName(p));
+      fillFromOFF(p);
+    });
   }
 
   function detectSource(text){
