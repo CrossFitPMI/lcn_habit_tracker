@@ -56,6 +56,20 @@
   .res b{display:block;font-size:14px;line-height:1.3}
   .res small{color:var(--muted)}
   .status{font-size:14px;color:var(--muted);margin-top:10px}
+  .scanbtn{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:13px 16px;font-size:16px;margin-bottom:10px}
+  .scanbtn svg{width:20px;height:20px}
+  .scanner{margin:0 0 10px;border-radius:12px;overflow:hidden;background:#000;position:relative}
+  .scanner[hidden]{display:none}
+  .scanner #reader{width:100%}
+  .scanner #reader video{width:100%!important;display:block}
+  .scanner .scanbar{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;background:#111;color:#ddd;font-size:13px}
+  .scanner .scanbar button{background:#fff;color:#111;border:0;border-radius:8px;padding:6px 12px;font:600 13px "DM Sans",sans-serif;cursor:pointer}
+  .orline{text-align:center;font-size:12px;color:var(--muted);margin:2px 0 8px}
+  .featured{margin-top:12px}
+  .featured[hidden]{display:none}
+  .featured .flabel{font-family:Nunito,sans-serif;font-weight:800;font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--brand-dark);margin-bottom:6px}
+  .featured .chip{border-color:var(--brand);color:var(--brand-dark);font-weight:600}
+  .featured .disc{font-size:12px;color:var(--muted);margin-top:6px}
   .status.err{color:var(--g-low)}
   /* form */
   .fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -145,7 +159,7 @@
         <p class="sub">Search by name or barcode, or skip straight to entering the label yourself.</p>
         <div class="tabs" role="tablist">
           <button class="tab" role="tab" aria-selected="true" data-tab="search">Search</button>
-          <button class="tab" role="tab" aria-selected="false" data-tab="barcode">Barcode</button>
+          <button class="tab" role="tab" aria-selected="false" data-tab="barcode">Scan barcode</button>
           <button class="tab" role="tab" aria-selected="false" data-tab="manual">Enter label</button>
         </div>
 
@@ -155,14 +169,28 @@
             <button class="btn" type="submit">Search</button>
           </form>
           <div class="chips" id="chips"></div>
+          <div class="featured" id="featured" hidden>
+            <div class="flabel">Lean Comp picks</div>
+            <div class="chips" id="featuredChips"></div>
+            <div class="disc" id="featuredDisc"></div>
+          </div>
         </div>
 
         <div class="panel" data-panel="barcode" hidden>
+          <button class="btn scanbtn" type="button" id="scanBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8v8M10 8v8M13 8v8M17 8v8"/></svg>
+            Scan with your camera
+          </button>
+          <div class="scanner" id="scanner" hidden>
+            <div id="reader"></div>
+            <div class="scanbar"><span>Point at the barcode on the pack</span><button type="button" id="scanStop">Cancel</button></div>
+          </div>
+          <div class="orline">or type the number</div>
           <form class="row" id="barcodeForm">
             <input id="code" inputmode="numeric" placeholder="Barcode number, e.g. 7340001802503" autocomplete="off" aria-label="Barcode">
             <button class="btn" type="submit">Look up</button>
           </form>
-          <div class="hint">The digits under the barcode on the pack.</div>
+          <div class="hint">The digits under the barcode on the pack. Scanning works on most phones; the camera is only used while the scanner is open.</div>
         </div>
 
         <div class="panel" data-panel="manual" hidden>
@@ -591,6 +619,94 @@
     var c = document.createElement("button"); c.type = "button"; c.className = "chip"; c.textContent = q;
     c.addEventListener("click", function(){ $("q").value = q; search(q); });
     $("chips").appendChild(c);
+  });
+
+  /* ---------- Featured products (label values per 100g, from the pack) ----------
+     To add one, copy the example line, fill in the numbers from the pack, and remove the // at the start.
+     source must be one of the ids in SOURCES above (e.g. "whey_iso", "whey_conc", "milk"). */
+  var FEATURED = [
+    // {name:"Wheyd – Chocolate", kcal:0, protein:0, carbs:0, sugar:0, polyols:0, serving:30, source:"whey_conc"},
+  ];
+  var FEATURED_NOTE = "Available at CrossFit PMI. Scored with exactly the same formula as everything else.";
+  (function buildFeatured(){
+    if(!FEATURED.length) return;
+    $("featured").hidden = false;
+    $("featuredDisc").textContent = FEATURED_NOTE;
+    FEATURED.forEach(function(f){
+      var c = document.createElement("button"); c.type = "button"; c.className = "chip"; c.textContent = f.name;
+      c.addEventListener("click", function(){
+        $("name").value = f.name; $("energyUnit").value = "kcal";
+        setVal("energy", f.kcal, 0); setVal("protein", f.protein, 1); setVal("carbs", f.carbs, 1);
+        setVal("sugar", f.sugar, 1); setVal("polyols", f.polyols, 1); setVal("serving", f.serving, 0);
+        $("price").value = ""; $("pack").value = "";
+        $("source").value = f.source || "unsure"; $("detectNote").hidden = true;
+        setStatus(""); $("results").innerHTML = "";
+        update();
+        if(window.innerWidth < 900) $("resultCard").scrollIntoView({behavior:"smooth", block:"start"});
+      });
+      $("featuredChips").appendChild(c);
+    });
+  })();
+
+  /* ---------- Camera barcode scanner ---------- */
+  var SCAN_LIB = "https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js";
+  var scanner = null, scanLibPromise = null, scanning = false;
+  function loadScanLib(){
+    if(window.Html5Qrcode) return Promise.resolve();
+    if(scanLibPromise) return scanLibPromise;
+    scanLibPromise = new Promise(function(res, rej){
+      var s = document.createElement("script"); s.src = SCAN_LIB; s.async = true;
+      s.onload = function(){ res(); }; s.onerror = function(){ scanLibPromise = null; rej(new Error("load")); };
+      document.head.appendChild(s);
+    });
+    return scanLibPromise;
+  }
+  function stopScan(){
+    scanning = false;
+    var done = function(){ $("scanner").hidden = true; $("scanBtn").hidden = false; postHeight(); };
+    if(scanner){ try { scanner.stop().then(function(){ try { scanner.clear(); } catch(e){} done(); }, done); } catch(e){ done(); } }
+    else done();
+  }
+  function startScan(){
+    if(scanning) return;
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      setStatus("This browser can't use the camera here. Type the barcode number instead.", true); return;
+    }
+    scanning = true; setStatus("Starting camera…");
+    $("scanBtn").hidden = true; $("scanner").hidden = false; postHeight();
+    loadScanLib().then(function(){
+      var F = window.Html5QrcodeSupportedFormats;
+      scanner = new window.Html5Qrcode("reader", {
+        verbose: false,
+        formatsToSupport: [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E],
+        experimentalFeatures: {useBarCodeDetectorIfSupported: true}
+      });
+      return scanner.start({facingMode: "environment"},
+        {fps: 12, qrbox: function(w, hgt){ var bw = Math.min(320, Math.floor(w * 0.85)); return {width: bw, height: Math.floor(bw * 0.5)}; }, aspectRatio: 1.333},
+        function(text){
+          if(!scanning) return;
+          var code = String(text).replace(/\D/g, "");
+          if(code.length < 8) return;
+          if(navigator.vibrate) try { navigator.vibrate(60); } catch(e){}
+          stopScan();
+          $("code").value = code;
+          lookup(code);
+        },
+        function(){ /* no barcode in this frame yet */ }
+      ).then(function(){ setStatus("Hold the barcode steady inside the box."); postHeight(); });
+    }).catch(function(err){
+      var msg = String(err && (err.name || err.message || err));
+      stopScan();
+      if(/NotAllowed|Permission|denied/i.test(msg)) setStatus("Camera access was blocked. Allow the camera for this page in your browser settings, or type the barcode number below.", true);
+      else if(/NotFound|no camera|Requested device/i.test(msg)) setStatus("No camera found on this device. Type the barcode number below.", true);
+      else if(/load/i.test(msg)) setStatus("The scanner couldn't load. Check your connection, or type the barcode number below.", true);
+      else setStatus("The camera couldn't start. Type the barcode number below instead.", true);
+    });
+  }
+  $("scanBtn").addEventListener("click", startScan);
+  $("scanStop").addEventListener("click", function(){ stopScan(); setStatus(""); });
+  Array.prototype.forEach.call(document.querySelectorAll(".tab"), function(t){
+    t.addEventListener("click", function(){ if(scanning && t.getAttribute("data-tab") !== "barcode") stopScan(); });
   });
 
   /* ---------- result rendering ---------- */
