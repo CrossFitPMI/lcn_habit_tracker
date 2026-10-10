@@ -1,0 +1,731 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Protein Score | Lean Comp Nutrition</title>
+<meta name="description" content="Is your high-protein snack actually a good protein source? Score any product from its EU nutrition label, or look it up by name or barcode.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#111111; --ink-2:#3a3a3a; --muted:#6b6b6b; --line:#e4e4e4; --bg:#f5f8f2; --card:#ffffff;
+    --brand:#5a9e2f; --brand-dark:#3d7a1a; --brand-light:#8cc63f; --brand-tint:#eef6e8; --red:#cc2200;
+    --g-excellent:#1f8a4c; --g-good:#5c9e3a; --g-mid:#d39a00; --g-low:#c0392b;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  h1,h2,h3{font-family:Nunito,system-ui,sans-serif;font-weight:800;letter-spacing:-.01em;margin:0}
+  .wrap{max-width:1080px;margin:0 auto;padding:24px 16px 48px}
+  /* header */
+  .hero{background:var(--brand-dark);color:#fff;border-radius:var(--radius);padding:28px 24px;margin-bottom:20px;position:relative;overflow:hidden}
+  .hero:after{content:"";position:absolute;right:-60px;top:-60px;width:220px;height:220px;border-radius:50%;background:var(--brand-light);opacity:.35}
+  .brand{font-family:Nunito,sans-serif;font-weight:800;font-size:13px;letter-spacing:.14em;color:#d4ecc0;text-transform:uppercase;position:relative;z-index:1}
+  .hero h1{font-size:clamp(30px,6vw,46px);line-height:1.05;margin:6px 0 10px;position:relative;z-index:1}
+  .hero h1 span{color:var(--brand-light)}
+  .hero p{margin:0;max-width:620px;color:#e6f2dc;position:relative;z-index:1}
+  /* layout */
+  .grid{display:grid;grid-template-columns:1fr;gap:20px}
+  @media(min-width:900px){.grid{grid-template-columns:1.1fr .9fr}.sticky{position:sticky;top:16px}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px}
+  .card h2{font-size:20px;margin-bottom:4px}
+  .sub{color:var(--muted);font-size:14px;margin:0 0 14px}
+  /* tabs */
+  .tabs{display:flex;gap:6px;background:#f0efed;padding:4px;border-radius:10px;margin-bottom:14px}
+  .tab{flex:1;border:0;background:transparent;padding:9px 8px;border-radius:8px;font:600 14px "DM Sans",sans-serif;color:var(--ink-2);cursor:pointer}
+  .tab[aria-selected="true"]{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+  .panel[hidden]{display:none}
+  .row{display:flex;gap:8px}
+  input,select{width:100%;font:16px "DM Sans",sans-serif;padding:10px 12px;border:1px solid #cfcfcf;border-radius:10px;background:#fff;color:var(--ink)}
+  input:focus,select:focus{outline:2px solid var(--brand);outline-offset:1px;border-color:var(--brand)}
+  .btn{border:0;background:var(--brand);color:#fff;font:600 15px "DM Sans",sans-serif;padding:10px 16px;border-radius:10px;cursor:pointer;white-space:nowrap}
+  .btn:hover{background:var(--brand-dark)}
+  .btn.ghost{background:#fff;color:var(--ink);border:1px solid #cfcfcf}
+  .btn.ghost:hover{border-color:var(--ink)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 11px;font-size:13px;cursor:pointer;color:var(--ink-2)}
+  .chip:hover{border-color:var(--brand);color:var(--brand-dark)}
+  .results{margin-top:12px;display:flex;flex-direction:column;gap:6px;max-height:330px;overflow:auto}
+  .res{display:flex;gap:10px;align-items:center;text-align:left;border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px;cursor:pointer;font:inherit;color:inherit;width:100%}
+  .res:hover{border-color:var(--brand)}
+  .res img{width:42px;height:42px;object-fit:contain;border-radius:6px;background:#f3f3f3;flex:none}
+  .res .ph{width:42px;height:42px;border-radius:6px;background:#f0efed;flex:none}
+  .res b{display:block;font-size:14px;line-height:1.3}
+  .res small{color:var(--muted)}
+  .status{font-size:14px;color:var(--muted);margin-top:10px}
+  .status.err{color:var(--g-low)}
+  /* form */
+  .fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .fields .full{grid-column:1/-1}
+  label{display:block;font-size:13px;font-weight:600;margin-bottom:4px;color:var(--ink-2)}
+  label .opt{font-weight:400;color:var(--muted)}
+  .hint{font-size:12px;color:var(--muted);margin-top:3px}
+  .unit{display:flex}
+  .unit input{border-top-right-radius:0;border-bottom-right-radius:0}
+  .unit select{width:auto;border-left:0;border-top-left-radius:0;border-bottom-left-radius:0;background:#f7f7f7}
+  .section-label{grid-column:1/-1;font-family:Nunito,sans-serif;font-weight:800;text-transform:uppercase;letter-spacing:.08em;font-size:13px;color:var(--brand-dark);margin-top:6px;border-top:1px solid var(--line);padding-top:12px}
+  .note{background:var(--brand-tint);border-left:3px solid var(--brand);padding:8px 10px;border-radius:6px;font-size:13px;margin-top:10px}
+  .note[hidden]{display:none}
+  .formactions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+  /* result */
+  .empty{color:var(--muted);text-align:center;padding:30px 10px}
+  .scorehead{display:flex;align-items:center;gap:18px}
+  .ring{position:relative;width:128px;height:128px;flex:none}
+  .ring svg{transform:rotate(-90deg)}
+  .ring .val{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .ring .num{font-family:Nunito,sans-serif;font-size:40px;font-weight:900;line-height:1}
+  .ring .of{font-size:12px;color:var(--muted)}
+  .grade{font-family:Nunito,sans-serif;font-weight:900;font-size:22px;line-height:1.1}
+  .gradeline{color:var(--ink-2);font-size:14px;margin-top:4px}
+  .pname{font-weight:700;margin-bottom:12px;font-size:15px}
+  .factors{margin-top:18px;display:flex;flex-direction:column;gap:12px}
+  .f-top{display:flex;justify-content:space-between;font-size:14px;font-weight:600}
+  .f-top span:last-child{color:var(--muted);font-weight:500}
+  .bar{height:8px;background:#eee;border-radius:99px;overflow:hidden;margin:5px 0 3px}
+  .bar i{display:block;height:100%;background:var(--ink);border-radius:99px;transition:width .4s}
+  .f-desc{font-size:12px;color:var(--muted)}
+  .tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}
+  .tile{border:1px solid var(--line);border-radius:10px;padding:10px}
+  .tile .k{font-size:12px;color:var(--muted)}
+  .tile .v{font-family:Nunito,sans-serif;font-size:22px;font-weight:800}
+  .tile .s{font-size:12px;color:var(--ink-2)}
+  .badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:99px;color:#fff;vertical-align:middle}
+  .warn{background:#fff6e0;border-left:3px solid var(--g-mid);padding:8px 10px;border-radius:6px;font-size:13px;margin-top:12px}
+  .warn[hidden]{display:none}
+  /* compare */
+  .compare{margin-top:20px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{padding:9px 8px;border-bottom:1px solid var(--line);text-align:left}
+  th{font-family:Nunito,sans-serif;text-transform:uppercase;letter-spacing:.05em;font-size:12px;color:var(--muted);font-weight:800;cursor:pointer;user-select:none;white-space:nowrap}
+  td.n,th.n{text-align:right}
+  .pill{display:inline-block;min-width:38px;text-align:center;font-weight:700;color:#fff;border-radius:6px;padding:2px 6px}
+  .tag{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 5px;margin-left:6px;white-space:nowrap}
+  .tag.you{color:var(--brand-dark);border-color:var(--brand)}
+  .x{border:0;background:none;color:var(--muted);cursor:pointer;font-size:16px;padding:0 4px}
+  .x:hover{color:var(--red)}
+  .tablewrap{overflow-x:auto}
+  .filter{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+  /* method */
+  details{border-top:1px solid var(--line);padding:12px 0}
+  details:first-of-type{border-top:0}
+  summary{cursor:pointer;font-weight:600;list-style:none;display:flex;justify-content:space-between}
+  summary::-webkit-details-marker{display:none}
+  summary:after{content:"+";color:var(--brand);font-weight:700}
+  details[open] summary:after{content:"–"}
+  details p,details li{color:var(--ink-2);font-size:14px}
+  .diaas td,.diaas th{padding:6px 8px;font-size:13px}
+  /* cta */
+  .cta{background:var(--brand-dark);color:#fff;border-radius:var(--radius);padding:24px;margin-top:20px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between}
+  .cta h2{font-size:24px}
+  .cta p{margin:4px 0 0;color:#e6f2dc;max-width:560px}
+  .cta a{background:#fff;color:var(--brand-dark);text-decoration:none;font-weight:700;padding:12px 20px;border-radius:10px;white-space:nowrap}
+  .cta a:hover{background:var(--brand-light);color:var(--ink)}
+  footer{font-size:12px;color:var(--muted);margin-top:20px;line-height:1.6}
+  footer a{color:var(--muted)}
+  @media(max-width:480px){.fields{grid-template-columns:1fr}.scorehead{gap:12px}.ring{width:108px;height:108px}.ring svg{width:108px;height:108px}.ring .num{font-size:34px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="brand">Lean Comp Nutrition</div>
+    <h1>Protein <span>Score</span></h1>
+    <p>Is your "high protein" snack actually a good protein source? Look it up or type in the label, and get a 0–10 score built for EU labels, with the protein quality and leucine your muscles actually care about.</p>
+  </header>
+
+  <div class="grid">
+    <!-- LEFT: input -->
+    <div>
+      <section class="card" aria-labelledby="find-h">
+        <h2 id="find-h">1. Find a product</h2>
+        <p class="sub">Search by name or barcode, or skip straight to entering the label yourself.</p>
+        <div class="tabs" role="tablist">
+          <button class="tab" role="tab" aria-selected="true" data-tab="search">Search</button>
+          <button class="tab" role="tab" aria-selected="false" data-tab="barcode">Barcode</button>
+          <button class="tab" role="tab" aria-selected="false" data-tab="manual">Enter label</button>
+        </div>
+
+        <div class="panel" data-panel="search">
+          <form class="row" id="searchForm">
+            <input id="q" type="search" placeholder="e.g. Fulfil peanut caramel" autocomplete="off" aria-label="Product name">
+            <button class="btn" type="submit">Search</button>
+          </form>
+          <div class="chips" id="chips"></div>
+        </div>
+
+        <div class="panel" data-panel="barcode" hidden>
+          <form class="row" id="barcodeForm">
+            <input id="code" inputmode="numeric" placeholder="Barcode number, e.g. 7340001802503" autocomplete="off" aria-label="Barcode">
+            <button class="btn" type="submit">Look up</button>
+          </form>
+          <div class="hint">The digits under the barcode on the pack.</div>
+        </div>
+
+        <div class="panel" data-panel="manual" hidden>
+          <p class="sub" style="margin:0">Fill in the label below using the <b>per 100g</b> column.</p>
+        </div>
+
+        <div class="status" id="status" aria-live="polite"></div>
+        <div class="results" id="results"></div>
+      </section>
+
+      <section class="card" style="margin-top:20px" aria-labelledby="label-h">
+        <h2 id="label-h">2. Check the label</h2>
+        <p class="sub">Use the <b>per 100g</b> column. Looked-up data comes from Open Food Facts, so give it a quick check against the pack.</p>
+        <form id="labelForm" class="fields" autocomplete="off" novalidate>
+          <div class="full">
+            <label for="name">Product name <span class="opt">(optional)</span></label>
+            <input id="name" type="text" placeholder="My protein bar">
+          </div>
+          <div>
+            <label for="energy">Energy</label>
+            <div class="unit">
+              <input id="energy" type="number" step="any" min="0" inputmode="decimal" placeholder="364">
+              <select id="energyUnit" aria-label="Energy unit"><option value="kcal">kcal</option><option value="kj">kJ</option></select>
+            </div>
+          </div>
+          <div>
+            <label for="protein">Protein (g)</label>
+            <input id="protein" type="number" step="any" min="0" inputmode="decimal" placeholder="36">
+          </div>
+          <div>
+            <label for="carbs">Carbohydrate (g)</label>
+            <input id="carbs" type="number" step="any" min="0" inputmode="decimal" placeholder="33">
+          </div>
+          <div>
+            <label for="sugar">of which sugars (g)</label>
+            <input id="sugar" type="number" step="any" min="0" inputmode="decimal" placeholder="2">
+          </div>
+          <div>
+            <label for="polyols">of which polyols (g) <span class="opt">(if listed)</span></label>
+            <input id="polyols" type="number" step="any" min="0" inputmode="decimal" placeholder="0">
+          </div>
+          <div>
+            <label for="serving">Serving size (g)</label>
+            <input id="serving" type="number" step="any" min="0" inputmode="decimal" placeholder="55">
+            <div class="hint">One bar, one scoop, one pot…</div>
+          </div>
+          <div class="full">
+            <label for="source">Main protein source</label>
+            <select id="source"></select>
+            <div class="hint">Pick the first protein in the ingredients list. We'll guess it for looked-up products.</div>
+            <div class="note" id="detectNote" hidden></div>
+          </div>
+          <div class="section-label">Value <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-family:'DM Sans'">(optional)</span></div>
+          <div>
+            <label for="price">Price (€)</label>
+            <input id="price" type="number" step="any" min="0" inputmode="decimal" placeholder="2.50">
+          </div>
+          <div>
+            <label for="pack">Pack size (g)</label>
+            <input id="pack" type="number" step="any" min="0" inputmode="decimal" placeholder="55">
+          </div>
+        </form>
+        <div class="formactions">
+          <button class="btn ghost" id="resetBtn" type="button">Clear</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- RIGHT: result -->
+    <div>
+      <section class="card sticky" aria-labelledby="res-h" id="resultCard">
+        <h2 id="res-h">3. Your score</h2>
+        <div id="resultEmpty" class="empty">Enter at least energy and protein to see the score. It updates as you type.</div>
+        <div id="result" hidden>
+          <div class="pname" id="rName"></div>
+          <div class="scorehead">
+            <div class="ring">
+              <svg width="128" height="128" viewBox="0 0 128 128" aria-hidden="true">
+                <circle cx="64" cy="64" r="54" fill="none" stroke="#eee" stroke-width="12"/>
+                <circle id="ringArc" cx="64" cy="64" r="54" fill="none" stroke="#111" stroke-width="12" stroke-linecap="round" stroke-dasharray="339.3" stroke-dashoffset="339.3" style="transition:stroke-dashoffset .5s,stroke .3s"/>
+              </svg>
+              <div class="val"><div class="num" id="rScore">0.0</div><div class="of">out of 10</div></div>
+            </div>
+            <div>
+              <div class="grade" id="rGrade"></div>
+              <div class="gradeline" id="rLine"></div>
+            </div>
+          </div>
+          <div class="warn" id="rWarn" hidden></div>
+          <div class="factors" id="rFactors"></div>
+          <div class="tiles" id="rTiles"></div>
+          <div class="formactions">
+            <button class="btn" id="addBtn" type="button">Add to comparison</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- COMPARE -->
+  <section class="card compare" aria-labelledby="cmp-h">
+    <h2 id="cmp-h">Compare</h2>
+    <p class="sub">Products you add are saved on this device. Benchmarks use typical per-100g values for everyday foods.</p>
+    <div class="filter" id="cmpFilter">
+      <button class="chip" data-f="all">All</button>
+      <button class="chip" data-f="you">Your products</button>
+      <button class="chip" data-f="food">Benchmarks</button>
+    </div>
+    <div class="tablewrap">
+      <table id="cmpTable">
+        <thead><tr>
+          <th data-sort="name">Product</th>
+          <th class="n" data-sort="protein">Protein /100g</th>
+          <th class="n" data-sort="kcal">kcal /100g</th>
+          <th class="n" data-sort="score">Score ▾</th>
+          <th></th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- METHOD -->
+  <section class="card" style="margin-top:20px" aria-labelledby="how-h">
+    <h2 id="how-h">How the score works</h2>
+    <p class="sub">A low score doesn't make a food "bad". It tells you how well it does the job of a protein source, so you can compare similar products.</p>
+    <details open>
+      <summary>The four factors</summary>
+      <ul>
+        <li><b>Protein density (30%)</b>: the share of calories that come from protein. 10% or less scores zero, 60% or more scores full marks.</li>
+        <li><b>Protein quality (35%)</b>: based on the DIAAS score of the main protein source, which measures how well its essential amino acids are digested and used. Anything at 1.0 or above gets full marks.</li>
+        <li><b>Carb efficiency (20%)</b>: grams of protein per gram of net carbohydrate (carbs minus half of any polyols). EU labels already leave fibre out of carbohydrate, so we don't subtract it again.</li>
+        <li><b>Sugar ratio (15%)</b>: protein ÷ (protein + sugar). Products where sugar rivals protein drop fast.</li>
+      </ul>
+      <p>If you choose "Not sure" for the source, the score uses the other three factors only.</p>
+    </details>
+    <details>
+      <summary>Why per 100g, and why fat isn't scored</summary>
+      <p>EU labels always show per-100g values, so scoring on them lets you compare a bar with a yogurt fairly, whatever the serving size. Fat isn't penalised: this rates protein sources, not overall healthiness. Calories from fat still lower protein density.</p>
+    </details>
+    <details>
+      <summary>Leucine and "usable protein"</summary>
+      <p><b>Leucine</b> is the amino acid that switches on muscle building. Around 2.5g per meal or snack is a commonly cited target for a strong response. We estimate it from the protein per serving and the typical leucine content of the source. It isn't part of the score because it depends on how much you eat.</p>
+      <p><b>Usable protein</b> is protein per 100g multiplied by the source's DIAAS (capped at 1.0). It's a rough guide to how much of the label figure your body can put to work. That's why collagen-based products can claim lots of protein yet show almost none here.</p>
+    </details>
+    <details>
+      <summary>Protein source values</summary>
+      <div class="tablewrap"><table class="diaas"><thead><tr><th>Source</th><th class="n">DIAAS (approx.)</th><th class="n">Leucine g/100g protein</th></tr></thead><tbody id="diaasBody"></tbody></table></div>
+      <p>Values are approximate, rounded from published DIAAS research (adult/older-child reference pattern) and vary with processing. Blend values are estimates.</p>
+    </details>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta">
+    <div>
+      <h2>Protein sorted. Now the rest.</h2>
+      <p>The 12-Week Fat Loss Blueprint shows you how to build meals around protein you'll actually enjoy, without tracking everything forever.</p>
+    </div>
+    <a href="https://leancompnutrition.com" target="_top" rel="noopener">See the Blueprint</a>
+  </section>
+
+  <footer>
+    Product lookups use <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener">Open Food Facts</a> (ODbL), a crowd-sourced database, so always check figures against the pack. This tool is for education and comparison only and isn't medical or dietetic advice. © <span id="yr"></span> Lean Comp Nutrition.
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- Protein source data ---------- */
+  // diaas: approximate DIAAS (adult/older child reference); leu: g leucine per 100g protein
+  var SOURCES = [
+    {id:"whey_iso",   name:"Whey isolate / hydrolysate", group:"Animal", diaas:1.09, leu:11.0},
+    {id:"whey_conc",  name:"Whey concentrate",           group:"Animal", diaas:0.97, leu:10.5},
+    {id:"milk",       name:"Milk protein (isolate/concentrate)", group:"Animal", diaas:1.18, leu:9.8},
+    {id:"casein",     name:"Casein / caseinate",         group:"Animal", diaas:1.00, leu:9.3},
+    {id:"dairy_food", name:"Yogurt, skyr, cottage cheese, cheese", group:"Animal", diaas:1.10, leu:10.0},
+    {id:"egg",        name:"Egg / egg white",            group:"Animal", diaas:1.13, leu:8.6},
+    {id:"poultry",    name:"Chicken / turkey",           group:"Animal", diaas:1.08, leu:8.0},
+    {id:"beef",       name:"Beef / pork / lamb",         group:"Animal", diaas:1.10, leu:8.0},
+    {id:"fish",       name:"Fish & seafood",             group:"Animal", diaas:1.00, leu:8.1},
+    {id:"animal_mix", name:"Animal protein blend",       group:"Blends", diaas:1.05, leu:9.5},
+    {id:"animal_plant",name:"Animal + plant blend",      group:"Blends", diaas:0.90, leu:8.8},
+    {id:"pea_rice",   name:"Pea + rice blend",           group:"Blends", diaas:0.85, leu:8.3},
+    {id:"plant_mix",  name:"Plant blend (several sources)", group:"Blends", diaas:0.80, leu:8.0},
+    {id:"soy",        name:"Soy protein / tofu",         group:"Plant",  diaas:0.90, leu:8.0},
+    {id:"myco",       name:"Mycoprotein (Quorn)",        group:"Plant",  diaas:0.95, leu:7.5},
+    {id:"pea",        name:"Pea protein",                group:"Plant",  diaas:0.82, leu:8.4},
+    {id:"legumes",    name:"Beans, lentils, chickpeas",  group:"Plant",  diaas:0.65, leu:7.8},
+    {id:"oat",        name:"Oat protein",                group:"Plant",  diaas:0.57, leu:7.5},
+    {id:"hemp",       name:"Hemp protein",               group:"Plant",  diaas:0.50, leu:6.5},
+    {id:"nuts",       name:"Nuts & seeds",               group:"Plant",  diaas:0.45, leu:6.8},
+    {id:"wheat",      name:"Wheat protein / gluten / seitan", group:"Plant", diaas:0.40, leu:6.8},
+    {id:"rice",       name:"Rice protein",               group:"Plant",  diaas:0.37, leu:8.2},
+    {id:"collagen",   name:"Collagen",                   group:"Incomplete", diaas:0, leu:2.8},
+    {id:"gelatin",    name:"Gelatine",                   group:"Incomplete", diaas:0, leu:3.0},
+    {id:"unsure",     name:"Not sure (leave out of score)", group:"Other", diaas:null, leu:null}
+  ];
+  var SRC = {}; SOURCES.forEach(function(s){ SRC[s.id] = s; });
+
+  // keyword -> source id, used to guess the first protein in an ingredients list
+  var KEYWORDS = [
+    ["hydrolysed whey","whey_iso"],["hydrolyzed whey","whey_iso"],["whey protein isolate","whey_iso"],["whey isolate","whey_iso"],
+    ["whey protein concentrate","whey_conc"],["whey protein","whey_conc"],
+    ["milk protein isolate","milk"],["milk protein concentrate","milk"],["milk protein","milk"],["milk proteins","milk"],
+    ["micellar casein","casein"],["calcium caseinate","casein"],["sodium caseinate","casein"],["caseinate","casein"],["casein","casein"],
+    ["egg white","egg"],["egg albumen","egg"],["dried egg","egg"],["whole egg","egg"],
+    ["beef","beef"],["pork","beef"],["chicken","poultry"],["turkey","poultry"],["tuna","fish"],["salmon","fish"],
+    ["collagen","collagen"],["gelatine","gelatin"],["gelatin","gelatin"],
+    ["soy protein","soy"],["soya protein","soy"],["soy isolate","soy"],["soya isolate","soy"],["tofu","soy"],["soya beans","soy"],["soybeans","soy"],
+    ["pea protein","pea"],["rice protein","rice"],["brown rice protein","rice"],
+    ["wheat protein","wheat"],["wheat gluten","wheat"],["vital wheat gluten","wheat"],
+    ["hemp protein","hemp"],["hemp seed","hemp"],["mycoprotein","myco"],["oat protein","oat"],
+    ["yogurt","dairy_food"],["yoghurt","dairy_food"],["skyr","dairy_food"],["quark","dairy_food"],["cottage cheese","dairy_food"]
+  ];
+
+  /* ---------- Whole-food benchmarks (typical per-100g values) ---------- */
+  var BENCH = [
+    {name:"Chicken breast, cooked", kcal:165, protein:31, carbs:0, sugar:0, polyols:0, serving:150, source:"poultry"},
+    {name:"Eggs (whole)",          kcal:143, protein:12.6, carbs:0.7, sugar:0.4, polyols:0, serving:100, source:"egg"},
+    {name:"0% fat Greek yogurt",    kcal:57,  protein:10.3, carbs:3.6, sugar:3.2, polyols:0, serving:170, source:"dairy_food"},
+    {name:"Skyr, natural",          kcal:63,  protein:11, carbs:4, sugar:4, polyols:0, serving:150, source:"dairy_food"},
+    {name:"Cottage cheese, low fat",kcal:72,  protein:12.4, carbs:2.7, sugar:2.7, polyols:0, serving:150, source:"dairy_food"},
+    {name:"Tuna in spring water",   kcal:109, protein:25, carbs:0, sugar:0, polyols:0, serving:110, source:"fish"},
+    {name:"Beef mince 5% fat, raw", kcal:125, protein:21, carbs:0, sugar:0, polyols:0, serving:125, source:"beef"},
+    {name:"Salmon fillet, raw",     kcal:208, protein:20, carbs:0, sugar:0, polyols:0, serving:130, source:"fish"},
+    {name:"Firm tofu",              kcal:126, protein:13.6, carbs:1, sugar:0.5, polyols:0, serving:100, source:"soy"},
+    {name:"Lentils, cooked",        kcal:116, protein:9, carbs:12, sugar:1.8, polyols:0, serving:150, source:"legumes"},
+    {name:"Whey isolate powder",    kcal:370, protein:88, carbs:3, sugar:2, polyols:0, serving:30, source:"whey_iso"}
+  ];
+
+  var QUICK = ["Fulfil","Barebells","Grenade","Nutramino","Arla Protein","Myprotein","Optimum Nutrition","Misfits","Lucozade Sport protein","Avonmore Protein"];
+
+  /* ---------- helpers ---------- */
+  function $(id){ return document.getElementById(id); }
+  function clamp(x){ return Math.max(0, Math.min(1, x)); }
+  function num(id){ var v = $(id).value; if(v === "" || v == null) return null; var x = parseFloat(String(v).replace(",", ".")); return isNaN(x) ? null : x; }
+  function fmt(x, d){ return (Math.round(x * Math.pow(10, d)) / Math.pow(10, d)).toFixed(d); }
+  function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+  function gradeOf(s){
+    if(s >= 8.5) return {label:"Excellent", color:"var(--g-excellent)", hex:"#1f8a4c", line:"A genuinely strong protein source."};
+    if(s >= 7)   return {label:"Good", color:"var(--g-good)", hex:"#5c9e3a", line:"Does the job well, with a few compromises."};
+    if(s >= 5)   return {label:"Moderate", color:"var(--g-mid)", hex:"#d39a00", line:"Some protein, but it's not the main event."};
+    return {label:"More treat than protein", color:"var(--g-low)", hex:"#c0392b", line:"Enjoy it, but don't count on it for your protein."};
+  }
+
+  /* ---------- scoring ---------- */
+  function score(d){
+    var P = d.protein, K = d.kcal;
+    var densPct = Math.min(100, (P * 4) / K * 100);
+    var dens = clamp((densPct - 10) / 50);
+
+    var net = Math.max(0, (d.carbs || 0) - 0.5 * (d.polyols || 0));
+    var ratio = net > 0 ? P / net : Infinity;
+    var carb = net < 0.5 ? 1 : clamp((Math.log(ratio) - Math.log(0.25)) / (Math.log(3) - Math.log(0.25)));
+
+    var sug = d.sugar || 0;
+    var sr = P / (P + sug);
+    var sugarS = clamp((sr - 0.5) / 0.45);
+
+    var src = SRC[d.source] || SRC.unsure;
+    var srcS = src.diaas == null ? null : Math.min(1, src.diaas);
+
+    var total = srcS == null
+      ? (0.30 * dens + 0.20 * carb + 0.15 * sugarS) / 0.65
+      : 0.30 * dens + 0.35 * srcS + 0.20 * carb + 0.15 * sugarS;
+
+    return {
+      score: Math.round(total * 100) / 10,
+      dens: dens, densPct: densPct, carb: carb, ratio: ratio, net: net,
+      sugarS: sugarS, sr: sr, srcS: srcS, src: src
+    };
+  }
+
+  /* ---------- UI: source select + DIAAS table ---------- */
+  (function buildSourceSelect(){
+    var sel = $("source"), groups = {}, order = [];
+    SOURCES.forEach(function(s){ if(!groups[s.group]){ groups[s.group] = []; order.push(s.group); } groups[s.group].push(s); });
+    order.forEach(function(g){
+      var og = document.createElement("optgroup"); og.label = g === "Incomplete" ? "Incomplete proteins" : g;
+      groups[g].forEach(function(s){ var o = document.createElement("option"); o.value = s.id; o.textContent = s.name; og.appendChild(o); });
+      sel.appendChild(og);
+    });
+    sel.value = "unsure";
+    var body = $("diaasBody");
+    SOURCES.filter(function(s){ return s.diaas != null; }).forEach(function(s){
+      var tr = document.createElement("tr");
+      tr.innerHTML = "<td>" + esc(s.name) + "</td><td class='n'>" + fmt(s.diaas, 2) + "</td><td class='n'>" + fmt(s.leu, 1) + "</td>";
+      body.appendChild(tr);
+    });
+  })();
+
+  /* ---------- tabs ---------- */
+  Array.prototype.forEach.call(document.querySelectorAll(".tab"), function(t){
+    t.addEventListener("click", function(){
+      Array.prototype.forEach.call(document.querySelectorAll(".tab"), function(x){ x.setAttribute("aria-selected", x === t ? "true" : "false"); });
+      Array.prototype.forEach.call(document.querySelectorAll(".panel"), function(p){ p.hidden = p.getAttribute("data-panel") !== t.getAttribute("data-tab"); });
+      $("results").innerHTML = ""; setStatus("");
+      if(t.getAttribute("data-tab") === "manual") $("energy").focus();
+    });
+  });
+
+  /* ---------- Open Food Facts ---------- */
+  var OFF_FIELDS = "code,product_name,product_name_en,brands,nutriments,serving_quantity,ingredients_text,ingredients_text_en,image_front_small_url";
+  function setStatus(msg, err){ var s = $("status"); s.textContent = msg; s.className = "status" + (err ? " err" : ""); }
+  function fetchJSON(url){
+    var ctrl = ("AbortController" in window) ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function(){ ctrl.abort(); }, 15000) : null;
+    return fetch(url, ctrl ? {signal: ctrl.signal} : {}).then(function(r){
+      if(timer) clearTimeout(timer);
+      if(!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    });
+  }
+  function nutr(p){
+    var n = p.nutriments || {};
+    var kcal = n["energy-kcal_100g"];
+    if(kcal == null && n["energy_100g"] != null) kcal = n["energy_100g"] / 4.184;
+    return {kcal: kcal, protein: n["proteins_100g"], carbs: n["carbohydrates_100g"], sugar: n["sugars_100g"], polyols: n["polyols_100g"]};
+  }
+  function pName(p){ return (p.product_name_en || p.product_name || "Unnamed product") + (p.brands ? " – " + String(p.brands).split(",")[0] : ""); }
+
+  function renderResults(list){
+    var box = $("results"); box.innerHTML = "";
+    list = list.filter(function(p){ var n = nutr(p); return n.protein != null && n.kcal != null; });
+    if(!list.length){ setStatus("No products with full nutrition data found. Try another name, or enter the label yourself.", true); return; }
+    setStatus(list.length + " result" + (list.length > 1 ? "s" : "") + ". Tap one to score it.");
+    list.forEach(function(p){
+      var n = nutr(p);
+      var b = document.createElement("button"); b.type = "button"; b.className = "res";
+      b.innerHTML = (p.image_front_small_url ? "<img alt='' loading='lazy' src='" + esc(p.image_front_small_url) + "'>" : "<span class='ph'></span>") +
+        "<span><b>" + esc(pName(p)) + "</b><small>" + fmt(n.protein, 1) + "g protein · " + Math.round(n.kcal) + " kcal per 100g</small></span>";
+      b.addEventListener("click", function(){ fillFromOFF(p); });
+      box.appendChild(b);
+    });
+  }
+
+  function search(q){
+    q = (q || "").trim(); if(!q) return;
+    $("results").innerHTML = ""; setStatus("Searching…");
+    var url = "https://world.openfoodfacts.org/cgi/search.pl?search_terms=" + encodeURIComponent(q) +
+      "&search_simple=1&action=process&json=1&page_size=20&sort_by=unique_scans_n&fields=" + OFF_FIELDS;
+    fetchJSON(url).then(function(j){ renderResults(j.products || []); })
+      .catch(function(){ setStatus("Search isn't responding right now. Try again in a moment, or enter the label yourself.", true); });
+  }
+  function lookup(code){
+    code = (code || "").replace(/\D/g, ""); if(code.length < 6){ setStatus("That doesn't look like a full barcode.", true); return; }
+    $("results").innerHTML = ""; setStatus("Looking up " + code + "…");
+    fetchJSON("https://world.openfoodfacts.org/api/v2/product/" + code + ".json?fields=" + OFF_FIELDS)
+      .then(function(j){
+        if(j.status !== 1 || !j.product){ setStatus("Product not found. Try searching by name, or enter the label yourself.", true); return; }
+        var n = nutr(j.product);
+        if(n.protein == null || n.kcal == null){ setStatus("Found it, but its nutrition data is incomplete. Please fill in the label below.", true); }
+        else setStatus("Found: " + pName(j.product));
+        fillFromOFF(j.product);
+      })
+      .catch(function(){ setStatus("Lookup isn't responding right now. Try again in a moment.", true); });
+  }
+
+  function detectSource(text){
+    if(!text) return null;
+    var t = text.toLowerCase(), best = null, bestIdx = Infinity, hasCollagen = false;
+    KEYWORDS.forEach(function(k){
+      var i = t.indexOf(k[0]);
+      if(i >= 0){
+        if(k[1] === "collagen" || k[1] === "gelatin") hasCollagen = true;
+        if(i < bestIdx || (i === bestIdx && k[0].length > best.kw.length)){ bestIdx = i; best = {id:k[1], kw:k[0]}; }
+      }
+    });
+    return best ? {id: best.id, kw: best.kw, collagen: hasCollagen} : {id:null, collagen: hasCollagen};
+  }
+
+  function setVal(id, v, d){ $(id).value = (v == null || isNaN(v)) ? "" : String(Math.round(v * Math.pow(10, d)) / Math.pow(10, d)); }
+  function fillFromOFF(p){
+    var n = nutr(p);
+    $("name").value = pName(p);
+    $("energyUnit").value = "kcal";
+    setVal("energy", n.kcal, 0); setVal("protein", n.protein, 1); setVal("carbs", n.carbs, 1);
+    setVal("sugar", n.sugar, 1); setVal("polyols", n.polyols, 1);
+    setVal("serving", p.serving_quantity ? parseFloat(p.serving_quantity) : null, 0);
+    $("price").value = ""; $("pack").value = "";
+    var det = detectSource(p.ingredients_text_en || p.ingredients_text);
+    var note = $("detectNote");
+    if(det && det.id){
+      $("source").value = det.id;
+      note.innerHTML = "We guessed <b>" + esc(SRC[det.id].name) + "</b> from \u201c" + esc(det.kw) + "\u201d in the ingredients. Change it if that's wrong." +
+        (det.collagen && det.id !== "collagen" && det.id !== "gelatin" ? "<br>Heads up: it also contains collagen or gelatine, which counts toward the protein figure but adds little muscle-building value." : "");
+      note.hidden = false;
+    } else {
+      $("source").value = "unsure";
+      note.textContent = "We couldn't spot the protein source in the ingredients. Pick it from the list for a full score.";
+      note.hidden = false;
+    }
+    $("results").innerHTML = "";
+    update();
+    if(window.innerWidth < 900) $("resultCard").scrollIntoView({behavior:"smooth", block:"start"});
+  }
+
+  $("searchForm").addEventListener("submit", function(e){ e.preventDefault(); search($("q").value); });
+  $("barcodeForm").addEventListener("submit", function(e){ e.preventDefault(); lookup($("code").value); });
+  QUICK.forEach(function(q){
+    var c = document.createElement("button"); c.type = "button"; c.className = "chip"; c.textContent = q;
+    c.addEventListener("click", function(){ $("q").value = q; search(q); });
+    $("chips").appendChild(c);
+  });
+
+  /* ---------- result rendering ---------- */
+  var current = null;
+  function readForm(){
+    var e = num("energy"); if(e != null && $("energyUnit").value === "kj") e = e / 4.184;
+    return {name: $("name").value.trim(), kcal: e, protein: num("protein"), carbs: num("carbs"), sugar: num("sugar"),
+      polyols: num("polyols"), serving: num("serving"), source: $("source").value, price: num("price"), pack: num("pack")};
+  }
+
+  function update(){
+    var d = readForm();
+    if(!d.kcal || !d.protein || d.kcal <= 0 || d.protein <= 0){ $("result").hidden = true; $("resultEmpty").hidden = false; current = null; postHeight(); return; }
+    var r = score(d), g = gradeOf(r.score);
+    current = {d: d, r: r};
+    $("resultEmpty").hidden = true; $("result").hidden = false;
+    $("rName").textContent = d.name || "Your product";
+    $("rScore").textContent = fmt(r.score, 1);
+    $("rGrade").textContent = g.label; $("rGrade").style.color = g.color;
+    $("rLine").textContent = g.line;
+    var arc = $("ringArc"); arc.style.stroke = g.hex; arc.style.strokeDashoffset = String(339.3 * (1 - r.score / 10));
+
+    // sanity warnings
+    var warns = [];
+    if(d.protein * 4 > d.kcal * 1.08) warns.push("The protein figure is more than the energy allows. Check that energy is per 100g and in the right unit.");
+    if(d.sugar != null && d.carbs != null && d.sugar > d.carbs + 0.5) warns.push("Sugars can't be higher than total carbohydrate. Check those two numbers.");
+    if(d.carbs == null || d.sugar == null) warns.push("Carbohydrate or sugar is blank, so it's treated as 0. Fill them in for an accurate score.");
+    if(r.src.id === "collagen" || r.src.id === "gelatin") warns.push("Collagen and gelatine lack essential amino acids (no tryptophan), so they score zero on quality even though they count as protein on the label.");
+    $("rWarn").innerHTML = warns.map(esc).join("<br>"); $("rWarn").hidden = !warns.length;
+
+    // factors
+    var ratioTxt = r.net < 0.5 ? "almost no carbs" : fmt(r.ratio, 1) + "g protein per g net carb";
+    var f = [
+      {k:"Protein density", w:"30%", v:r.dens, desc: Math.round(r.densPct) + "% of calories come from protein"},
+      {k:"Protein quality", w:"35%", v:r.srcS, desc: r.srcS == null ? "Source not selected, so this factor is left out" : r.src.name + " · DIAAS ≈ " + fmt(r.src.diaas, 2)},
+      {k:"Carb efficiency", w:"20%", v:r.carb, desc: ratioTxt},
+      {k:"Sugar ratio", w:"15%", v:r.sugarS, desc: Math.round(r.sr * 100) + "% protein vs sugar"}
+    ];
+    $("rFactors").innerHTML = f.map(function(x){
+      var pct = x.v == null ? 0 : Math.round(x.v * 100);
+      return "<div><div class='f-top'><span>" + x.k + " <span style='color:var(--muted);font-weight:400'>(" + x.w + ")</span></span><span>" + (x.v == null ? "–" : pct + "/100") + "</span></div>" +
+        "<div class='bar'><i style='width:" + pct + "%;background:" + (x.v == null ? "#ccc" : gradeOf(x.v * 10).hex) + "'></i></div>" +
+        "<div class='f-desc'>" + esc(x.desc) + "</div></div>";
+    }).join("");
+
+    // tiles
+    var tiles = [];
+    var usable = r.srcS == null ? null : d.protein * r.srcS;
+    tiles.push({k:"Usable protein /100g", v: usable == null ? "–" : fmt(usable, 1) + "g", s: usable == null ? "Pick a source to see this" : "of " + fmt(d.protein, 1) + "g on the label"});
+    if(d.serving){
+      var ps = d.protein * d.serving / 100;
+      tiles.push({k:"Protein per serving", v: fmt(ps, 1) + "g", s: fmt(d.kcal * d.serving / 100, 0) + " kcal in " + fmt(d.serving, 0) + "g"});
+      if(r.src.leu != null){
+        var leu = ps * r.src.leu / 100, b;
+        if(leu >= 2.5) b = "<span class='badge' style='background:var(--g-excellent)'>Hits ~2.5g</span>";
+        else if(leu >= 1.7) b = "<span class='badge' style='background:var(--g-mid)'>Close</span>";
+        else b = "<span class='badge' style='background:var(--g-low)'>Low</span>";
+        tiles.push({k:"Leucine per serving (est.)", v: fmt(leu, 1) + "g", s: b + (leu < 2.5 ? " pair with another protein" : " strong muscle-building dose"), raw:true});
+      } else tiles.push({k:"Leucine per serving", v:"–", s:"Pick a source to estimate"});
+    } else {
+      tiles.push({k:"Protein per serving", v:"–", s:"Add serving size"});
+      tiles.push({k:"Leucine per serving", v:"–", s:"Add serving size"});
+    }
+    if(d.price && d.pack){
+      var protPack = d.protein * d.pack / 100;
+      tiles.push({k:"Cost per 20g protein", v: protPack > 0 ? "€" + fmt(d.price / protPack * 20, 2) : "–", s: fmt(protPack, 1) + "g protein in the pack"});
+    } else tiles.push({k:"Cost per 20g protein", v:"–", s:"Add price & pack size"});
+    $("rTiles").innerHTML = tiles.map(function(t){
+      return "<div class='tile'><div class='k'>" + esc(t.k) + "</div><div class='v'>" + esc(t.v) + "</div><div class='s'>" + (t.raw ? t.s : esc(t.s)) + "</div></div>";
+    }).join("");
+    postHeight();
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll("#labelForm input, #labelForm select"), function(el){
+    el.addEventListener("input", update); el.addEventListener("change", update);
+  });
+  $("source").addEventListener("change", function(){ $("detectNote").hidden = true; });
+  $("resetBtn").addEventListener("click", function(){
+    $("labelForm").reset(); $("source").value = "unsure"; $("energyUnit").value = "kcal"; $("detectNote").hidden = true; update();
+  });
+
+  /* ---------- comparison (saved per device) ---------- */
+  var KEY = "lcn-protein-score-compare";
+  function loadSaved(){ try { var x = JSON.parse(localStorage.getItem(KEY) || "[]"); return Array.isArray(x) ? x : []; } catch(e){ return []; } }
+  function save(list){ try { localStorage.setItem(KEY, JSON.stringify(list)); } catch(e){} }
+  var saved = loadSaved();
+  var sortKey = "score", sortDir = -1, filter = "all";
+
+  $("addBtn").addEventListener("click", function(){
+    if(!current) return;
+    var d = current.d;
+    saved.push({id: Date.now(), name: d.name || "My product", kcal: d.kcal, protein: d.protein, carbs: d.carbs, sugar: d.sugar, polyols: d.polyols, source: d.source});
+    save(saved); filter = "all"; renderCompare();
+    var b = $("addBtn"); b.textContent = "Added ✓"; setTimeout(function(){ b.textContent = "Add to comparison"; }, 1400);
+  });
+
+  function renderCompare(){
+    var rows = [];
+    if(filter !== "food") saved.forEach(function(s){ rows.push({you:true, id:s.id, name:s.name, protein:s.protein, kcal:s.kcal, score: score(s).score}); });
+    if(filter !== "you") BENCH.forEach(function(b){ rows.push({you:false, name:b.name, protein:b.protein, kcal:b.kcal, score: score(b).score}); });
+    rows.sort(function(a, b){
+      var x = a[sortKey], y = b[sortKey];
+      if(typeof x === "string") return sortDir * x.localeCompare(y);
+      return sortDir * (x - y);
+    });
+    var tb = document.querySelector("#cmpTable tbody");
+    if(!rows.length){ tb.innerHTML = "<tr><td colspan='5' style='color:var(--muted)'>Nothing here yet. Score a product and tap \u201cAdd to comparison\u201d.</td></tr>"; postHeight(); return; }
+    tb.innerHTML = rows.map(function(r){
+      var g = gradeOf(r.score);
+      return "<tr><td>" + esc(r.name) + (r.you ? "<span class='tag you'>yours</span>" : "<span class='tag'>benchmark</span>") + "</td>" +
+        "<td class='n'>" + fmt(r.protein, 1) + "g</td><td class='n'>" + Math.round(r.kcal) + "</td>" +
+        "<td class='n'><span class='pill' style='background:" + g.hex + "'>" + fmt(r.score, 1) + "</span></td>" +
+        "<td class='n'>" + (r.you ? "<button class='x' title='Remove' aria-label='Remove " + esc(r.name) + "' data-id='" + r.id + "'>×</button>" : "") + "</td></tr>";
+    }).join("");
+    Array.prototype.forEach.call(tb.querySelectorAll(".x"), function(b){
+      b.addEventListener("click", function(){
+        var id = Number(b.getAttribute("data-id"));
+        saved = saved.filter(function(s){ return s.id !== id; }); save(saved); renderCompare();
+      });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("#cmpTable th[data-sort]"), function(th){
+      var k = th.getAttribute("data-sort"), base = th.textContent.replace(/ [▾▴]$/, "");
+      th.textContent = base + (k === sortKey ? (sortDir < 0 ? " ▾" : " ▴") : "");
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("#cmpFilter .chip"), function(c){
+      var on = c.getAttribute("data-f") === filter;
+      c.style.borderColor = on ? "var(--brand)" : ""; c.style.color = on ? "var(--brand-dark)" : "";
+    });
+    postHeight();
+  }
+  Array.prototype.forEach.call(document.querySelectorAll("#cmpTable th[data-sort]"), function(th){
+    th.addEventListener("click", function(){
+      var k = th.getAttribute("data-sort");
+      if(sortKey === k) sortDir = -sortDir; else { sortKey = k; sortDir = k === "name" ? 1 : -1; }
+      renderCompare();
+    });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("#cmpFilter .chip"), function(c){
+    c.addEventListener("click", function(){ filter = c.getAttribute("data-f"); renderCompare(); });
+  });
+
+  /* ---------- embed: tell the parent page our height ---------- */
+  var lastH = 0;
+  function postHeight(){
+    if(window.parent === window) return;
+    var h = Math.ceil(document.documentElement.scrollHeight);
+    if(Math.abs(h - lastH) < 4) return; lastH = h;
+    try { window.parent.postMessage({lcnProteinScoreHeight: h}, "*"); } catch(e){}
+  }
+  if("ResizeObserver" in window) new ResizeObserver(postHeight).observe(document.body);
+  window.addEventListener("load", postHeight);
+
+  $("yr").textContent = new Date().getFullYear();
+  renderCompare(); update();
+
+  // expose scorer for testing
+  window.__lcnScore = score;
+})();
+</script>
+</body>
+</html>
