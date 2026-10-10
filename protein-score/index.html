@@ -502,23 +502,35 @@
     });
   }
 
+  var searchCache = {}, searching = false;
+  function cacheGet(k){ if(searchCache[k]) return searchCache[k]; try { var v = sessionStorage.getItem("lcn-ps-" + k); return v ? JSON.parse(v) : null; } catch(e){ return null; } }
+  function cacheSet(k, v){ searchCache[k] = v; try { sessionStorage.setItem("lcn-ps-" + k, JSON.stringify(v)); } catch(e){} }
+  function wait(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+  function usable(list){ return (list || []).filter(function(p){ var n = nutr(p); return n.protein != null && n.kcal != null; }); }
+
   function search(q){
     q = (q || "").trim(); if(!q) return;
+    var key = q.toLowerCase();
+    var cached = cacheGet(key);
+    if(cached){ renderResults(cached); return; }
+    if(searching){ setStatus("Hang on, still finishing the last search…"); return; }
+    searching = true;
     $("results").innerHTML = ""; setStatus("Searching…");
     var fast = "https://search.openfoodfacts.org/search?q=" + encodeURIComponent(q) +
       "&page_size=20&langs=en&fields=" + OFF_FIELDS;
     var slow = "https://world.openfoodfacts.org/cgi/search.pl?search_terms=" + encodeURIComponent(q) +
       "&search_simple=1&action=process&json=1&page_size=20&sort_by=unique_scans_n&fields=" + OFF_FIELDS;
-    function usable(list){ return (list || []).filter(function(p){ var n = nutr(p); return n.protein != null && n.kcal != null; }); }
-    function tryBackup(){
-      setStatus("Still searching… the product database can be slow, give it up to 30 seconds.");
-      fetchJSON(slow, 30000).then(function(j){ renderResults(j.products || []); })
-        .catch(function(){ setStatus("The product database isn't responding right now. Try again in a minute, use the Barcode tab, or enter the label yourself.", true); });
-    }
-    fetchJSON(fast, 10000).then(function(j){
-      var list = usable(j.hits || j.products);
-      if(list.length) renderResults(list); else tryBackup();
-    }).catch(tryBackup);
+
+    function tryFast(){ return fetchJSON(fast, 10000).then(function(j){ var l = usable(j.hits || j.products); if(!l.length) throw new Error("empty"); return l; }); }
+    function trySlow(){ return fetchJSON(slow, 30000).then(function(j){ var l = usable(j.products); if(!l.length) throw new Error("empty"); return l; }); }
+
+    tryFast()
+      .catch(function(){ setStatus("Searching… (retrying)"); return wait(2500).then(tryFast); })
+      .catch(function(){ setStatus("Still searching… the product database can be slow, give it up to 30 seconds."); return trySlow(); })
+      .catch(function(){ return wait(4000).then(trySlow); })
+      .then(function(list){ cacheSet(key, list.slice(0, 20)); renderResults(list); },
+            function(){ setStatus("The product database is busy right now. Wait a minute and try again, use the Barcode tab, or enter the label yourself.", true); })
+      .then(function(){ searching = false; }, function(){ searching = false; });
   }
   function lookup(code){
     code = (code || "").replace(/\D/g, ""); if(code.length < 6){ setStatus("That doesn't look like a full barcode.", true); return; }
