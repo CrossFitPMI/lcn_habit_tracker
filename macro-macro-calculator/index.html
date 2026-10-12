@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calorie &amp; Macro Calculator | Lean Comp Nutrition</title>
+<meta name="description" content="Find your daily calories and protein in a minute, then get a full macro and hand-portion plan by email. Built for real life, tracking optional.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#111111; --ink-2:#3a3a3a; --muted:#6b6b6b; --line:#e4e4e4; --bg:#f5f8f2; --card:#ffffff;
+    --brand:#5a9e2f; --brand-dark:#3d7a1a; --brand-light:#8cc63f; --brand-tint:#eef6e8; --red:#cc2200;
+    --amber:#d39a00; --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  h1,h2,h3{font-family:Nunito,system-ui,sans-serif;font-weight:800;letter-spacing:-.01em;margin:0}
+  .wrap{max-width:1080px;margin:0 auto;padding:24px 16px 48px}
+  .hero{background:var(--brand-dark);color:#fff;border-radius:var(--radius);padding:28px 24px;margin-bottom:20px;position:relative;overflow:hidden}
+  .hero:after{content:"";position:absolute;right:-60px;top:-60px;width:220px;height:220px;border-radius:50%;background:var(--brand-light);opacity:.35}
+  .brand{font-family:Nunito,sans-serif;font-weight:800;font-size:13px;letter-spacing:.14em;color:#d4ecc0;text-transform:uppercase;position:relative;z-index:1}
+  .hero h1{font-size:clamp(30px,6vw,46px);line-height:1.05;margin:6px 0 10px;position:relative;z-index:1}
+  .hero h1 span{color:var(--brand-light)}
+  .hero p{margin:0;max-width:620px;color:#e6f2dc;position:relative;z-index:1}
+  .grid{display:grid;grid-template-columns:1fr;gap:20px}
+  @media(min-width:900px){.grid{grid-template-columns:1fr 1fr}.sticky{position:sticky;top:16px}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px}
+  .card+.card{margin-top:20px}
+  .card h2{font-size:20px;margin-bottom:4px}
+  .sub{color:var(--muted);font-size:14px;margin:0 0 14px}
+  label,.lbl{display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink-2)}
+  .opt{font-weight:400;color:var(--muted)}
+  .hint{font-size:12px;color:var(--muted);margin-top:4px}
+  .field{margin-bottom:16px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  input,select{width:100%;font:16px "DM Sans",sans-serif;padding:10px 12px;border:1px solid #cfcfcf;border-radius:10px;background:#fff;color:var(--ink)}
+  input:focus,select:focus{outline:2px solid var(--brand);outline-offset:1px;border-color:var(--brand)}
+  .inrow{display:flex;gap:8px;align-items:center}
+  .inrow .u{font-size:14px;color:var(--muted);white-space:nowrap}
+  /* segmented choice */
+  .seg{display:flex;gap:6px;background:#f0efed;padding:4px;border-radius:10px;flex-wrap:wrap}
+  .seg button{flex:1 1 0;min-width:0;border:0;background:transparent;padding:9px 8px;border-radius:8px;font:600 14px "DM Sans",sans-serif;color:var(--ink-2);cursor:pointer;line-height:1.25}
+  .seg button[aria-pressed="true"]{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+  .seg.small button{font-size:13px;padding:6px 8px}
+  .lblrow{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:10px}
+  .lblrow label{margin:0}
+  /* choice cards */
+  .choices{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .choices.three{grid-template-columns:1fr 1fr 1fr}
+  .choice{border:1px solid #cfcfcf;background:#fff;border-radius:10px;padding:10px;text-align:left;cursor:pointer;font:inherit;color:inherit}
+  .choice b{display:block;font-size:14px}
+  .choice small{display:block;color:var(--muted);font-size:12px;line-height:1.35;margin-top:2px}
+  .choice[aria-pressed="true"]{border-color:var(--brand);background:var(--brand-tint);box-shadow:inset 0 0 0 1px var(--brand)}
+  .btn{border:0;background:var(--brand);color:#fff;font:700 16px "DM Sans",sans-serif;padding:13px 18px;border-radius:10px;cursor:pointer;width:100%}
+  .btn:hover{background:var(--brand-dark)}
+  .btn[disabled]{opacity:.6;cursor:wait}
+  .err{color:var(--red);font-size:14px;margin-top:10px}
+  .err[hidden]{display:none}
+  .hidden{display:none!important}
+  /* results */
+  .empty{color:var(--muted);text-align:center;padding:30px 10px}
+  .big{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+  .big .n{font-family:Nunito,sans-serif;font-weight:900;font-size:56px;line-height:1;color:var(--brand-dark)}
+  .big .u{font-weight:700;color:var(--ink-2)}
+  .goalline{margin:6px 0 16px;color:var(--ink-2);font-size:15px}
+  .tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .tile{border:1px solid var(--line);border-radius:10px;padding:12px}
+  .tile .k{font-size:12px;color:var(--muted)}
+  .tile .v{font-family:Nunito,sans-serif;font-size:26px;font-weight:800;line-height:1.15}
+  .tile .s{font-size:12px;color:var(--ink-2)}
+  .note{background:var(--brand-tint);border-left:3px solid var(--brand);padding:9px 11px;border-radius:6px;font-size:13px;margin-top:12px}
+  .warn{background:#fff6e0;border-left:3px solid var(--amber);padding:9px 11px;border-radius:6px;font-size:13px;margin-top:12px}
+  /* locked */
+  .locked{margin-top:18px;border:1px dashed #bcd9a5;border-radius:12px;padding:16px;background:linear-gradient(180deg,#fbfdf9,#f3f9ee)}
+  .locked h3{font-size:18px;margin-bottom:4px}
+  .peek{list-style:none;padding:0;margin:10px 0 14px;display:flex;flex-direction:column;gap:6px}
+  .peek li{display:flex;justify-content:space-between;gap:10px;font-size:14px;border-bottom:1px solid #e3eedb;padding-bottom:6px}
+  .peek li span:last-child{filter:blur(5px);user-select:none;color:var(--ink-2);font-weight:700}
+  .consent{display:flex;gap:8px;align-items:flex-start;font-size:13px;font-weight:400;color:var(--ink-2);margin:4px 0 12px}
+  .consent input{width:18px;height:18px;flex:none;margin-top:1px}
+  .fine{font-size:12px;color:var(--muted);margin-top:8px}
+  .fine a{color:var(--muted)}
+  /* full plan */
+  .plan h3{font-size:18px;margin:20px 0 8px}
+  .plan h3:first-child{margin-top:0}
+  .macros{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .macro{border-radius:10px;padding:10px;text-align:center;border:1px solid var(--line)}
+  .macro .v{font-family:Nunito,sans-serif;font-weight:900;font-size:24px}
+  .macro .k{font-size:12px;color:var(--muted)}
+  .bar{display:flex;height:10px;border-radius:99px;overflow:hidden;margin:10px 0 4px}
+  .bar i{display:block;height:100%}
+  .legend{font-size:12px;color:var(--muted)}
+  .hands{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+  .hand{border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;gap:10px;align-items:center}
+  .hand .ico{width:38px;height:38px;border-radius:10px;background:var(--brand-tint);display:flex;align-items:center;justify-content:center;font-size:20px;flex:none}
+  .hand b{display:block;font-size:15px}
+  .hand small{color:var(--muted);font-size:12px;line-height:1.3;display:block}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:right}
+  th:first-child,td:first-child{text-align:left}
+  th{font-family:Nunito,sans-serif;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:800}
+  .sent{background:var(--brand-tint);border-radius:10px;padding:12px;font-size:14px;margin-bottom:14px}
+  /* method */
+  details{border-top:1px solid var(--line);padding:12px 0}
+  details:first-of-type{border-top:0}
+  summary{cursor:pointer;font-weight:600;list-style:none;display:flex;justify-content:space-between;gap:10px}
+  summary::-webkit-details-marker{display:none}
+  summary:after{content:"+";color:var(--brand);font-weight:700}
+  details[open] summary:after{content:"–"}
+  details p,details li{color:var(--ink-2);font-size:14px}
+  .cta{background:var(--brand-dark);color:#fff;border-radius:var(--radius);padding:24px;margin-top:20px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between}
+  .cta h2{font-size:24px}
+  .cta p{margin:4px 0 0;color:#e6f2dc;max-width:560px}
+  .cta a{background:#fff;color:var(--brand-dark);text-decoration:none;font-weight:700;padding:12px 20px;border-radius:10px;white-space:nowrap}
+  .cta a:hover{background:var(--brand-light);color:var(--ink)}
+  footer{font-size:12px;color:var(--muted);margin-top:20px;line-height:1.6}
+  footer a{color:var(--muted)}
+  @media(max-width:480px){.choices.three{grid-template-columns:1fr}.big .n{font-size:48px}.macros{grid-template-columns:repeat(3,1fr)}.hands{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="brand">Lean Comp Nutrition</div>
+    <h1>Calorie &amp; Macro <span>Calculator</span></h1>
+    <p>Answer a few quick questions to see how much to eat for your goal. Then get your full plan, with macros and a no-tracking hand-portion guide, sent to your inbox.</p>
+  </header>
+
+  <div class="grid">
+    <!-- LEFT: questions -->
+    <div>
+      <section class="card" aria-labelledby="you-h">
+        <h2 id="you-h">1. About you</h2>
+        <p class="sub">Used to estimate how much energy your body burns at rest.</p>
+
+        <div class="field">
+          <span class="lbl">Sex</span>
+          <div class="seg" data-name="sex">
+            <button type="button" data-v="f">Female</button>
+            <button type="button" data-v="m">Male</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="age">Age</label>
+          <div class="inrow"><input id="age" type="number" inputmode="numeric" min="18" max="80" placeholder="35"><span class="u">years</span></div>
+        </div>
+
+        <div class="field">
+          <div class="lblrow"><label for="hcm">Height</label>
+            <div class="seg small" data-name="hunit" style="width:150px"><button type="button" data-v="cm">cm</button><button type="button" data-v="ft">ft / in</button></div>
+          </div>
+          <div id="hMetric" class="inrow"><input id="hcm" type="number" inputmode="decimal" placeholder="175"><span class="u">cm</span></div>
+          <div id="hImperial" class="two hidden">
+            <div class="inrow"><input id="hft" type="number" inputmode="numeric" placeholder="5"><span class="u">ft</span></div>
+            <div class="inrow"><input id="hin" type="number" inputmode="decimal" placeholder="9"><span class="u">in</span></div>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="lblrow"><label for="wkg">Weight</label>
+            <div class="seg small" data-name="wunit" style="width:200px"><button type="button" data-v="kg">kg</button><button type="button" data-v="st">st / lb</button><button type="button" data-v="lb">lb</button></div>
+          </div>
+          <div id="wKg" class="inrow"><input id="wkg" type="number" inputmode="decimal" placeholder="80"><span class="u">kg</span></div>
+          <div id="wSt" class="two hidden">
+            <div class="inrow"><input id="wst" type="number" inputmode="numeric" placeholder="12"><span class="u">st</span></div>
+            <div class="inrow"><input id="wstlb" type="number" inputmode="decimal" placeholder="8"><span class="u">lb</span></div>
+          </div>
+          <div id="wLb" class="inrow hidden"><input id="wlb" type="number" inputmode="decimal" placeholder="176"><span class="u">lb</span></div>
+        </div>
+
+        <div class="field" style="margin-bottom:0">
+          <label for="bf">Body fat % <span class="opt">(optional)</span></label>
+          <div class="inrow"><input id="bf" type="number" inputmode="decimal" min="3" max="60" placeholder="Leave blank if you don't know"><span class="u">%</span></div>
+          <div class="hint">From a recent body scan (e.g. InBody or DEXA). Makes the estimate more accurate if you have it.</div>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="act-h">
+        <h2 id="act-h">2. Your week</h2>
+        <p class="sub">Most of the calories you burn come from daily movement, not just workouts.</p>
+        <div class="field">
+          <span class="lbl">Your work or day-to-day</span>
+          <div class="choices" data-name="job">
+            <button type="button" class="choice" data-v="desk"><b>Mostly sitting</b><small>Desk job, driving, studying</small></button>
+            <button type="button" class="choice" data-v="mixed"><b>Mixed</b><small>Some sitting, some on your feet</small></button>
+            <button type="button" class="choice" data-v="feet"><b>On your feet</b><small>Retail, nursing, teaching, coaching</small></button>
+            <button type="button" class="choice" data-v="physical"><b>Physical work</b><small>Construction, farming, labouring</small></button>
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <span class="lbl">Workouts per week</span>
+          <div class="seg" data-name="train">
+            <button type="button" data-v="0">0</button>
+            <button type="button" data-v="2">1–2</button>
+            <button type="button" data-v="4">3–4</button>
+            <button type="button" data-v="6">5+</button>
+          </div>
+          <div class="hint">Sessions of about an hour, e.g. gym, classes, running, sport.</div>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="goal-h">
+        <h2 id="goal-h">3. Your goal</h2>
+        <div class="field">
+          <div class="choices three" data-name="goal">
+            <button type="button" class="choice" data-v="lose"><b>Lose fat</b><small>Lean out, keep muscle</small></button>
+            <button type="button" class="choice" data-v="maintain"><b>Maintain</b><small>Stay here, improve shape</small></button>
+            <button type="button" class="choice" data-v="gain"><b>Build muscle</b><small>Gain size and strength</small></button>
+          </div>
+        </div>
+        <div class="field" id="paceField">
+          <span class="lbl">How quickly?</span>
+          <div class="choices" data-name="pace">
+            <button type="button" class="choice" data-v="steady"><b>Steady</b><small id="paceSteadyTxt">Easier to stick to</small></button>
+            <button type="button" class="choice" data-v="faster"><b>Faster</b><small id="paceFasterTxt">Harder, but quicker results</small></button>
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:18px">
+          <span class="lbl">How do you like to eat?</span>
+          <div class="seg" data-name="style">
+            <button type="button" data-v="balanced">Balanced</button>
+            <button type="button" data-v="carbs">More carbs</button>
+            <button type="button" data-v="fats">More fats</button>
+          </div>
+          <div class="hint">Not sure? Balanced suits most people. More carbs suits lots of training.</div>
+        </div>
+        <button class="btn" id="calcBtn" type="button">Show my numbers</button>
+        <div class="err" id="formErr" hidden></div>
+      </section>
+    </div>
+
+    <!-- RIGHT: results -->
+    <div>
+      <section class="card sticky" id="resultCard" aria-labelledby="res-h">
+        <h2 id="res-h">Your numbers</h2>
+        <div class="empty" id="resEmpty">Answer the questions and tap <b>Show my numbers</b>.</div>
+
+        <div id="resFree" class="hidden">
+          <div class="lbl" style="margin-top:6px">Daily calories</div>
+          <div class="big"><span class="n" id="rCal">0</span><span class="u">kcal / day</span></div>
+          <div class="goalline" id="rGoalLine"></div>
+          <div class="tiles">
+            <div class="tile"><div class="k">Protein</div><div class="v" id="rProt">0g</div><div class="s" id="rProtS"></div></div>
+            <div class="tile"><div class="k">Maintenance</div><div class="v" id="rTdee">0</div><div class="s">kcal / day to stay the same</div></div>
+          </div>
+          <div id="rNotes"></div>
+
+          <!-- Locked teaser + email form -->
+          <div class="locked" id="lockBox">
+            <h3>Get your full plan, free</h3>
+            <p class="sub" style="margin:0">We'll email it to you and unlock it here straight away.</p>
+            <ul class="peek">
+              <li><span>Carbs &amp; fats per day</span><span>000g · 00g</span></li>
+              <li><span>Hand portions per meal (no tracking)</span><span>2 palms · 2 fists</span></li>
+              <li><span>Meal-by-meal breakdown</span><span>4 meals × 00g</span></li>
+              <li><span>12-week projection</span><span>−0.0 kg</span></li>
+            </ul>
+            <form id="emailForm" novalidate>
+              <div class="field" style="margin-bottom:10px">
+                <label for="fname">First name</label>
+                <input id="fname" type="text" autocomplete="given-name" placeholder="Your first name">
+              </div>
+              <div class="field" style="margin-bottom:10px">
+                <label for="email">Email</label>
+                <input id="email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com">
+              </div>
+              <div class="field" style="margin-bottom:6px">
+                <label for="meals">Meals per day</label>
+                <div class="seg" data-name="meals">
+                  <button type="button" data-v="3">3</button>
+                  <button type="button" data-v="4">4</button>
+                  <button type="button" data-v="5">5</button>
+                </div>
+              </div>
+              <label class="consent"><input type="checkbox" id="consent"> <span>Also send me Lean Comp's weekly nutrition tips. Unsubscribe any time.</span></label>
+              <button class="btn" id="sendBtn" type="submit">Email me my full plan</button>
+              <div class="err" id="emailErr" hidden></div>
+              <div class="fine">We'll only use your email to send your plan, plus tips if you ticked the box. See our <a href="https://leancompnutrition.com/privacy" target="_blank" rel="noopener">privacy policy</a>.</div>
+            </form>
+          </div>
+
+          <!-- Full plan (unlocked) -->
+          <div id="planBox" class="plan hidden" style="margin-top:18px">
+            <div class="sent" id="sentMsg"></div>
+            <h3>Your daily macros</h3>
+            <div class="macros">
+              <div class="macro"><div class="v" id="pP">0g</div><div class="k">Protein</div></div>
+              <div class="macro"><div class="v" id="pC">0g</div><div class="k">Carbs</div></div>
+              <div class="macro"><div class="v" id="pF">0g</div><div class="k">Fat</div></div>
+            </div>
+            <div class="bar" id="pBar"></div>
+            <div class="legend" id="pLegend"></div>
+            <div class="note" id="pFibre"></div>
+
+            <h3>Not tracking? Use your hand</h3>
+            <p class="sub" style="margin:0 0 8px">Per meal, based on <span id="hMeals">4</span> meals a day. Your hand is sized to you and always with you.</p>
+            <div class="hands">
+              <div class="hand"><div class="ico">✋</div><div><b id="hPalm">2 palms</b><small>Protein: meat, fish, eggs, Greek yogurt, tofu. Palm-sized and as thick.</small></div></div>
+              <div class="hand"><div class="ico">✊</div><div><b id="hFist">2 fists</b><small>Vegetables: any kind, cooked or raw.</small></div></div>
+              <div class="hand"><div class="ico">🤲</div><div><b id="hCup">2 cupped hands</b><small>Carbs: rice, potatoes, oats, pasta, bread, fruit.</small></div></div>
+              <div class="hand"><div class="ico">👍</div><div><b id="hThumb">2 thumbs</b><small>Fats: oil, butter, nuts, nut butter, cheese.</small></div></div>
+            </div>
+
+            <h3>Meal by meal</h3>
+            <table><thead><tr><th>Each meal</th><th>Calories</th><th>Protein</th><th>Carbs</th><th>Fat</th></tr></thead><tbody id="mealBody"></tbody></table>
+
+            <h3>Your 12 weeks</h3>
+            <div id="projBox"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <section class="card" style="margin-top:20px" aria-labelledby="how-h">
+    <h2 id="how-h">How it works</h2>
+    <p class="sub">Every calculator gives an estimate. Use these numbers for 2–3 weeks, watch your weekly average weight, and adjust by 100–200 kcal if you need to.</p>
+    <details>
+      <summary>How your calories are worked out</summary>
+      <p>We estimate the calories you burn at rest using the Mifflin-St Jeor equation, or the Katch-McArdle equation if you enter your body fat. We then add your daily movement and training to get your <b>maintenance</b> calories, the amount that keeps your weight steady.</p>
+      <p>To lose fat we take away enough to lose about 0.5% (steady) or 0.75% (faster) of your body weight a week. To build muscle we add enough for about 0.25% or 0.5% a week.</p>
+    </details>
+    <details>
+      <summary>Safety limits</summary>
+      <p>We never cut more than 25% below your maintenance calories, and we never go below your resting energy needs (or 1,200 kcal for women and 1,500 kcal for men, whichever is higher). If you're already at a low body weight, we won't suggest losing more.</p>
+      <p>This calculator is for healthy adults. It isn't suitable during pregnancy or breastfeeding, for under-18s, or if you have a medical condition or a history of disordered eating. In those cases please talk to your GP or a registered dietitian.</p>
+    </details>
+    <details>
+      <summary>Why protein is set by body weight</summary>
+      <p>Protein is the one target that matters most for keeping and building muscle, so we set it from your body weight rather than as a percentage of calories: about 1.8 g per kg to maintain or build, and 2.0 g per kg while losing fat. If your BMI is above 30 and you haven't entered your body fat, we base it on a healthy reference weight for your height so the target stays realistic.</p>
+    </details>
+    <details>
+      <summary>How the hand portions work</summary>
+      <p>Hand portions are a simple way to eat to your targets without weighing or tracking. A palm of protein is roughly 20–25 g of protein, a cupped hand of carbs roughly 25–30 g of carbs, and a thumb of fats roughly 8–10 g of fat. They're approximate, and that's fine. Consistency matters far more than precision.</p>
+    </details>
+  </section>
+
+  <section class="cta">
+    <div>
+      <h2>Now make it stick.</h2>
+      <p>The 12-Week Fat Loss Blueprint shows you how to hit these numbers in real life, weekends and holidays included, without tracking forever.</p>
+    </div>
+    <a href="https://leancompnutrition.com" target="_top" rel="noopener">See the Blueprint</a>
+  </section>
+
+  <footer>
+    Estimates for healthy adults, for education only. This isn't medical or dietetic advice. Check out our <a href="https://leancompnutrition.com/protein-score" target="_top">Protein Score</a> tool to see how your snacks stack up. © <span id="yr"></span> Lean Comp Nutrition.
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ================= SETTINGS =================
+     WEBHOOK_URL: paste the HighLevel "Inbound Webhook" URL here (between the quotes).
+     While it's empty, the full plan still unlocks on the page but no email is sent. */
+  var WEBHOOK_URL = "";
+  var SOURCE = "macro-calculator";
+  /* ============================================ */
+
+  function $(id){ return document.getElementById(id); }
+  function num(id){ var v = $(id).value; if(v === "" || v == null) return null; var x = parseFloat(String(v).replace(",", ".")); return isNaN(x) ? null : x; }
+  function r5(x){ return Math.round(x / 5) * 5; }
+  function r10(x){ return Math.round(x / 10) * 10; }
+  function half(x){ return Math.max(0.5, Math.round(x * 2) / 2); }
+  function fmt(x){ return Math.round(x).toLocaleString("en-IE"); }
+  function plural(n, one, many){ var s = (n % 1 === 0) ? String(n) : String(n).replace(".5", "½"); if(s === "0½") s = "½"; return s + " " + (n === 1 || n === 0.5 ? one : many); }
+
+  /* ---------- choice controls ---------- */
+  var state = {sex:null, hunit:"cm", wunit:"kg", job:null, train:null, goal:null, pace:"steady", style:"balanced", meals:"4"};
+  function bindGroup(el){
+    var name = el.getAttribute("data-name");
+    var btns = el.querySelectorAll("button");
+    function paint(){ Array.prototype.forEach.call(btns, function(b){ b.setAttribute("aria-pressed", b.getAttribute("data-v") === state[name] ? "true" : "false"); }); }
+    Array.prototype.forEach.call(btns, function(b){
+      b.addEventListener("click", function(){ state[name] = b.getAttribute("data-v"); paint(); onChange(name); });
+    });
+    paint();
+  }
+  Array.prototype.forEach.call(document.querySelectorAll("[data-name]"), bindGroup);
+
+  function onChange(name){
+    if(name === "hunit"){ $("hMetric").classList.toggle("hidden", state.hunit !== "cm"); $("hImperial").classList.toggle("hidden", state.hunit !== "ft"); }
+    if(name === "wunit"){ $("wKg").classList.toggle("hidden", state.wunit !== "kg"); $("wSt").classList.toggle("hidden", state.wunit !== "st"); $("wLb").classList.toggle("hidden", state.wunit !== "lb"); }
+    if(name === "goal"){
+      $("paceField").classList.toggle("hidden", state.goal === "maintain");
+      $("paceSteadyTxt").textContent = state.goal === "gain" ? "About 0.25% of body weight a week. Less fat gain" : "About 0.5% of body weight a week. Easier to stick to";
+      $("paceFasterTxt").textContent = state.goal === "gain" ? "About 0.5% a week. Quicker, more fat gain" : "About 0.75% a week. Harder, quicker results";
+    }
+    if(name === "meals" && lastResult && unlocked) renderPlan(lastResult);
+    if(lastResult && name !== "meals") $("formErr").hidden = true;
+  }
+  onChange("goal");
+
+  /* ---------- read inputs ---------- */
+  function heightCm(){
+    if(state.hunit === "cm") return num("hcm");
+    var ft = num("hft"), inch = num("hin") || 0;
+    return ft == null ? null : (ft * 12 + inch) * 2.54;
+  }
+  function weightKg(){
+    if(state.wunit === "kg") return num("wkg");
+    if(state.wunit === "lb"){ var lb = num("wlb"); return lb == null ? null : lb * 0.45359237; }
+    var st = num("wst"), l = num("wstlb") || 0;
+    return st == null ? null : (st * 14 + l) * 0.45359237;
+  }
+
+  function validate(){
+    var age = num("age"), h = heightCm(), w = weightKg(), bf = num("bf");
+    if(!state.sex) return "Please choose your sex. It's used in the energy equation.";
+    if(age == null) return "Please enter your age.";
+    if(age < 18) return "This calculator is designed for adults (18+). For younger athletes, please talk to a coach, GP or dietitian about fuelling for growth and sport.";
+    if(age > 80) return "Please enter an age between 18 and 80.";
+    if(h == null || h < 130 || h > 230) return "Please check your height.";
+    if(w == null || w < 35 || w > 300) return "Please check your weight.";
+    if(bf != null && (bf < 3 || bf > 60)) return "Body fat % looks off. Leave it blank if you're not sure.";
+    if(!state.job) return "Please choose what your day-to-day looks like.";
+    if(state.train == null) return "Please choose how many workouts you do a week.";
+    if(!state.goal) return "Please choose your goal.";
+    return null;
+  }
+
+  /* ---------- the maths ---------- */
+  var JOB = {desk:1.2, mixed:1.3, feet:1.4, physical:1.55};
+  var TRAIN = {"0":0, "2":0.075, "4":0.15, "6":0.225};
+  var FATPCT = {balanced:0.30, carbs:0.22, fats:0.38};
+
+  function calc(){
+    var sex = state.sex, age = num("age"), h = heightCm(), w = weightKg(), bf = num("bf");
+    var bmi = w / Math.pow(h / 100, 2);
+    var lbm = bf != null ? w * (1 - bf / 100) : null;
+    var bmr = lbm != null ? 370 + 21.6 * lbm : 10 * w + 6.25 * h - 5 * age + (sex === "m" ? 5 : -161);
+    var mult = Math.min(2.0, JOB[state.job] + TRAIN[state.train]);
+    var tdee = bmr * mult;
+
+    var goal = state.goal, notes = [], kcal = tdee, weeklyKg = 0, adjusted = false;
+    if(goal === "lose" && bmi < 18.5){
+      goal = "maintain"; adjusted = true;
+      notes.push({t:"warn", m:"Your BMI is already below 18.5, so we've shown maintenance calories instead of a fat-loss target. If you want to change your shape, focus on strength training and protein, and consider talking to your GP or a dietitian."});
+    }
+    if(goal === "lose"){
+      var pct = state.pace === "faster" ? 0.0075 : 0.005;
+      weeklyKg = w * pct;
+      var deficit = weeklyKg * 7700 / 7;
+      var maxDef = tdee * 0.25;
+      if(deficit > maxDef){ deficit = maxDef; notes.push({t:"note", m:"We've capped your deficit at 25% below maintenance to protect your energy, training and muscle."}); }
+      kcal = tdee - deficit;
+      var floor = Math.max(sex === "m" ? 1500 : 1200, bmr);
+      if(kcal < floor){ kcal = floor; notes.push({t:"note", m:"We've kept your calories at a safe minimum. That means slower progress, but progress you can sustain."}); }
+      if(kcal >= tdee - 50){
+        kcal = tdee; goal = "maintain"; adjusted = true; notes = [];
+        notes.push({t:"warn", m:"Your maintenance calories are already close to the safe minimum, so cutting further isn't a good idea. Instead, eat at maintenance, prioritise protein and strength training, and add more daily movement (walking is great). That raises what you burn, which is the healthier way to create a deficit."});
+      }
+      weeklyKg = goal === "lose" ? (tdee - kcal) * 7 / 7700 : 0;
+    } else if(goal === "gain"){
+      var gp = state.pace === "faster" ? 0.005 : 0.0025;
+      weeklyKg = w * gp;
+      kcal = tdee + Math.min(500, weeklyKg * 7700 / 7);
+      weeklyKg = (kcal - tdee) * 7 / 7700;
+      if(bmi >= 30) notes.push({t:"note", m:"Tip: at your current weight, many people get great results building muscle at maintenance calories (“recomposition”). The Maintain option is worth a look."});
+    }
+    kcal = r10(kcal);
+
+    // protein
+    var perKg = goal === "lose" ? 2.0 : 1.8;
+    var protBasis = w, basisNote = "";
+    if(lbm != null){ protBasis = lbm; perKg = goal === "lose" ? 2.4 : 2.2; basisNote = "lean mass"; }
+    else if(bmi > 30){ protBasis = 25 * Math.pow(h / 100, 2); basisNote = "reference weight"; }
+    var protein = r5(protBasis * perKg);
+    protein = Math.min(protein, r5(kcal * 0.40 / 4)); // keep it sensible at low calories
+
+    // fat & carbs
+    var fat = r5(Math.max(kcal * FATPCT[state.style] / 9, w * 0.6));
+    if(bmi > 30 && lbm == null) fat = r5(Math.max(kcal * FATPCT[state.style] / 9, protBasis * 0.6));
+    var carbs = r5(Math.max(0, (kcal - protein * 4 - fat * 9) / 4));
+    var fibre = r5(kcal / 1000 * 14);
+
+    var protTxt = basisNote === "lean mass" ? "About " + perKg.toFixed(1) + " g per kg of lean mass" :
+                  basisNote === "reference weight" ? "Based on a healthy reference weight for your height" :
+                  "About " + perKg.toFixed(1) + " g per kg of body weight";
+
+    return {sex:sex, age:age, heightCm:h, weightKg:w, bodyFat:bf, bmi:bmi, bmr:bmr, tdee:r10(tdee), kcal:kcal,
+      goal:goal, goalChosen:state.goal, pace:state.pace, style:state.style, adjusted:adjusted,
+      weeklyKg:weeklyKg, protein:protein, carbs:carbs, fat:fat, fibre:fibre, protTxt:protTxt, notes:notes};
+  }
+
+  /* ---------- free results ---------- */
+  var lastResult = null, unlocked = false;
+  function goalLine(r){
+    if(r.goal === "lose") return "To lose about <b>" + r.weeklyKg.toFixed(2).replace(/0$/, "") + " kg a week</b> (" + (r.pace === "faster" ? "faster" : "steady") + " pace).";
+    if(r.goal === "gain") return "To gain about <b>" + r.weeklyKg.toFixed(2).replace(/0$/, "") + " kg a week</b>, mostly muscle with good training.";
+    return "To <b>maintain</b> your weight while you train and improve your shape.";
+  }
+  function showFree(r){
+    $("resEmpty").classList.add("hidden"); $("resFree").classList.remove("hidden");
+    $("rCal").textContent = fmt(r.kcal);
+    $("rGoalLine").innerHTML = goalLine(r);
+    $("rProt").textContent = r.protein + "g";
+    $("rProtS").textContent = r.protTxt;
+    $("rTdee").textContent = fmt(r.tdee);
+    $("rNotes").innerHTML = r.notes.map(function(n){ return "<div class='" + n.t + "'>" + n.m + "</div>"; }).join("");
+    if(unlocked) renderPlan(r);
+    postHeight();
+  }
+
+  $("calcBtn").addEventListener("click", function(){
+    var e = validate();
+    if(e){ $("formErr").textContent = e; $("formErr").hidden = false; return; }
+    $("formErr").hidden = true;
+    lastResult = calc();
+    showFree(lastResult);
+    if(window.innerWidth < 900) $("resultCard").scrollIntoView({behavior:"smooth", block:"start"});
+  });
+
+  /* ---------- full plan ---------- */
+  function hands(r, meals){
+    var m = r.sex === "m";
+    return {
+      palm: half(r.protein / (m ? 25 : 20) / meals),
+      cup: r.carbs > 0 ? half(r.carbs / (m ? 30 : 25) / meals) : 0,
+      thumb: half(r.fat / (m ? 10 : 8) / meals),
+      fist: m ? 2 : 1.5
+    };
+  }
+  function projection(r){
+    var weeks = 12, kg = r.weeklyKg * weeks, w = r.weightKg;
+    if(r.goal === "lose") return {text:"Around <b>" + (Math.round(kg * 2) / 2).toFixed(1) + " kg lighter</b> in 12 weeks (" + Math.round(w) + " → " + Math.round(w - kg) + " kg), if you hit your numbers most days. Expect weekly ups and downs. Judge progress on 2–3 week trends.", kg:-kg};
+    if(r.goal === "gain") return {text:"Around <b>" + (Math.round(kg * 2) / 2).toFixed(1) + " kg heavier</b> in 12 weeks with consistent strength training. If you're gaining much faster than that, drop 100–150 kcal.", kg:kg};
+    return {text:"Your weight should stay within about 1 kg over 12 weeks. With strength training and enough protein, your shape and strength can still improve a lot.", kg:0};
+  }
+  function renderPlan(r){
+    var meals = parseInt(state.meals, 10) || 4;
+    $("pP").textContent = r.protein + "g"; $("pC").textContent = r.carbs + "g"; $("pF").textContent = r.fat + "g";
+    var kP = r.protein * 4, kC = r.carbs * 4, kF = r.fat * 9, tot = kP + kC + kF;
+    $("pBar").innerHTML = "<i style='width:" + (kP / tot * 100) + "%;background:#3d7a1a'></i><i style='width:" + (kC / tot * 100) + "%;background:#8cc63f'></i><i style='width:" + (kF / tot * 100) + "%;background:#d39a00'></i>";
+    $("pLegend").textContent = "Protein " + Math.round(kP / tot * 100) + "% · Carbs " + Math.round(kC / tot * 100) + "% · Fat " + Math.round(kF / tot * 100) + "% of calories";
+    $("pFibre").innerHTML = "Aim for about <b>" + r.fibre + " g of fibre</b> a day as well: veg, fruit, beans, oats and wholegrains.";
+    var hd = hands(r, meals);
+    $("hMeals").textContent = meals;
+    $("hPalm").textContent = plural(hd.palm, "palm", "palms");
+    $("hFist").textContent = plural(hd.fist, "fist", "fists");
+    $("hCup").textContent = hd.cup ? plural(hd.cup, "cupped hand", "cupped hands") : "Optional";
+    $("hThumb").textContent = plural(hd.thumb, "thumb", "thumbs");
+    var row = "<tr><td>" + meals + " meals</td><td>" + fmt(r.kcal / meals) + "</td><td>" + Math.round(r.protein / meals) + "g</td><td>" + Math.round(r.carbs / meals) + "g</td><td>" + Math.round(r.fat / meals) + "g</td></tr>";
+    $("mealBody").innerHTML = row;
+    $("projBox").innerHTML = "<p style='margin:0;font-size:14px;color:var(--ink-2)'>" + projection(r).text + "</p>";
+    $("lockBox").classList.add("hidden"); $("planBox").classList.remove("hidden");
+    postHeight();
+  }
+
+  /* ---------- email capture ---------- */
+  function validEmail(e){ return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e); }
+  function payload(r){
+    var meals = parseInt(state.meals, 10) || 4, hd = hands(r, meals), pj = projection(r);
+    var goalTxt = {lose:"Lose fat", maintain:"Maintain", gain:"Build muscle"}[r.goal];
+    return {
+      first_name: $("fname").value.trim(),
+      email: $("email").value.trim(),
+      marketing_consent: $("consent").checked ? "yes" : "no",
+      source: SOURCE,
+      goal: goalTxt,
+      pace: r.goal === "maintain" ? "" : r.pace,
+      calories: r.kcal, maintenance_calories: r.tdee,
+      protein_g: r.protein, carbs_g: r.carbs, fat_g: r.fat, fibre_g: r.fibre,
+      weekly_change_kg: (r.goal === "lose" ? -1 : 1) * Math.round(r.weeklyKg * 100) / 100,
+      twelve_week_change_kg: Math.round(pj.kg * 10) / 10,
+      meals_per_day: meals,
+      per_meal_calories: Math.round(r.kcal / meals), per_meal_protein_g: Math.round(r.protein / meals),
+      per_meal_carbs_g: Math.round(r.carbs / meals), per_meal_fat_g: Math.round(r.fat / meals),
+      palms_protein: hd.palm, fists_veg: hd.fist, cupped_hands_carbs: hd.cup, thumbs_fat: hd.thumb,
+      sex: r.sex === "m" ? "male" : "female", age: r.age,
+      height_cm: Math.round(r.heightCm), weight_kg: Math.round(r.weightKg * 10) / 10,
+      body_fat_pct: r.bodyFat == null ? "" : r.bodyFat,
+      activity: state.job, workouts_per_week: state.train === "0" ? "0" : state.train === "2" ? "1-2" : state.train === "4" ? "3-4" : "5+",
+      eating_style: r.style
+    };
+  }
+  function send(data){
+    if(!WEBHOOK_URL) return Promise.resolve("skipped");
+    var body = JSON.stringify(data);
+    return fetch(WEBHOOK_URL, {method:"POST", headers:{"Content-Type":"application/json"}, body:body})
+      .then(function(res){ if(!res.ok) throw new Error("HTTP " + res.status); return "sent"; })
+      .catch(function(err){
+        // If the browser blocks reading the reply (CORS), send it in a simpler form instead.
+        if(err && /HTTP/.test(err.message)) throw err;
+        return fetch(WEBHOOK_URL, {method:"POST", mode:"no-cors", headers:{"Content-Type":"text/plain"}, body:body}).then(function(){ return "sent"; });
+      });
+  }
+  $("emailForm").addEventListener("submit", function(ev){
+    ev.preventDefault();
+    var errEl = $("emailErr"); errEl.hidden = true;
+    if(!lastResult){ errEl.textContent = "Tap “Show my numbers” first."; errEl.hidden = false; return; }
+    var name = $("fname").value.trim(), email = $("email").value.trim();
+    if(!name){ errEl.textContent = "Please add your first name."; errEl.hidden = false; return; }
+    if(!validEmail(email)){ errEl.textContent = "Please check your email address."; errEl.hidden = false; return; }
+    var btn = $("sendBtn"); btn.disabled = true; btn.textContent = "Sending…";
+    send(payload(lastResult)).then(function(status){
+      unlocked = true;
+      $("sentMsg").innerHTML = status === "skipped"
+        ? "Here's your full plan, " + escapeHtml(name) + "."
+        : "Done, " + escapeHtml(name) + "! Your plan is on its way to <b>" + escapeHtml(email) + "</b>. Check your spam folder if it's not there in a few minutes. Here it is now as well:";
+      renderPlan(lastResult);
+    }).catch(function(){
+      unlocked = true;
+      $("sentMsg").innerHTML = "We couldn't send the email just now, sorry. Here's your full plan, " + escapeHtml(name) + ". Screenshot it to keep it handy.";
+      renderPlan(lastResult);
+    }).then(function(){ btn.disabled = false; btn.textContent = "Email me my full plan"; });
+  });
+  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+
+  /* ---------- embed: tell the parent page our height ---------- */
+  var lastH = 0;
+  function postHeight(){
+    if(window.parent === window) return;
+    var h = Math.ceil(document.documentElement.scrollHeight);
+    if(Math.abs(h - lastH) < 4) return; lastH = h;
+    try { window.parent.postMessage({lcnMacroCalcHeight: h}, "*"); } catch(e){}
+  }
+  if("ResizeObserver" in window) new ResizeObserver(postHeight).observe(document.body);
+  window.addEventListener("load", postHeight);
+
+  $("yr").textContent = new Date().getFullYear();
+  window.__lcnMacro = {calc:calc, state:state, payload:payload};
+})();
+</script>
+</body>
+</html>
