@@ -569,7 +569,7 @@
       calories: r.kcal, maintenance_calories: r.tdee,
       protein_g: r.protein, carbs_g: r.carbs, fat_g: r.fat, fibre_g: r.fibre,
       weekly_change_kg: (r.goal === "lose" ? -1 : 1) * Math.round(r.weeklyKg * 100) / 100,
-      twelve_week_change_kg: Math.round(pj.kg * 10) / 10,
+      twelve_week_change_kg: (function(k){ k = Math.round(k * 2) / 2; return k > 0 ? "+" + k.toFixed(1) + " kg" : k < 0 ? "\u2212" + Math.abs(k).toFixed(1) + " kg" : "about the same weight (\u00b11 kg)"; })(pj.kg),
       meals_per_day: meals,
       per_meal_calories: Math.round(r.kcal / meals), per_meal_protein_g: Math.round(r.protein / meals),
       per_meal_carbs_g: Math.round(r.carbs / meals), per_meal_fat_g: Math.round(r.fat / meals),
