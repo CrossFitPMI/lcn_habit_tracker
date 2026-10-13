@@ -226,8 +226,9 @@
             <button type="button" data-v="balanced">Balanced</button>
             <button type="button" data-v="carbs">More carbs</button>
             <button type="button" data-v="fats">More fats</button>
+            <button type="button" data-v="protein">High protein</button>
           </div>
-          <div class="hint">Not sure? Balanced suits most people. More carbs suits lots of training.</div>
+          <div class="hint">Not sure? Balanced suits most people. More carbs suits lots of training. High protein helps if you're always hungry or want to protect muscle.</div>
         </div>
         <button class="btn" id="calcBtn" type="button">Show my numbers</button>
         <div class="err" id="formErr" hidden></div>
@@ -332,7 +333,7 @@
     </details>
     <details>
       <summary>Why protein is set by body weight</summary>
-      <p>Protein is the one target that matters most for keeping and building muscle, so we set it from your body weight rather than as a percentage of calories: about 1.8 g per kg to maintain or build, and 2.0 g per kg while losing fat. If your BMI is above 30 and you haven't entered your body fat, we base it on a healthy reference weight for your height so the target stays realistic.</p>
+      <p>Protein is the one target that matters most for keeping and building muscle, so we set it from your body weight rather than as a percentage of calories: about 1.8 g per kg to maintain or build, and 2.0 g per kg while losing fat. Choose <b>High protein</b> and these go up to 2.0 and 2.2 g per kg, with carbs coming down to make room. If your BMI is above 30 and you haven't entered your body fat, we base it on a healthy reference weight for your height so the target stays realistic.</p>
     </details>
     <details>
       <summary>How the hand portions work</summary>
@@ -429,7 +430,7 @@
   /* ---------- the maths ---------- */
   var JOB = {desk:1.2, mixed:1.3, feet:1.4, physical:1.55};
   var TRAIN = {"0":0, "2":0.075, "4":0.15, "6":0.225};
-  var FATPCT = {balanced:0.30, carbs:0.22, fats:0.38};
+  var FATPCT = {balanced:0.30, carbs:0.22, fats:0.38, protein:0.30};
 
   function calc(){
     var sex = state.sex, age = num("age"), h = heightCm(), w = weightKg(), bf = num("bf");
@@ -468,12 +469,13 @@
     kcal = r10(kcal);
 
     // protein
-    var perKg = goal === "lose" ? 2.0 : 1.8;
+    var hiP = state.style === "protein";
+    var perKg = goal === "lose" ? (hiP ? 2.2 : 2.0) : (hiP ? 2.0 : 1.8);
     var protBasis = w, basisNote = "";
-    if(lbm != null){ protBasis = lbm; perKg = goal === "lose" ? 2.4 : 2.2; basisNote = "lean mass"; }
+    if(lbm != null){ protBasis = lbm; perKg = goal === "lose" ? (hiP ? 2.6 : 2.4) : (hiP ? 2.4 : 2.2); basisNote = "lean mass"; }
     else if(bmi > 30){ protBasis = 25 * Math.pow(h / 100, 2); basisNote = "reference weight"; }
     var protein = r5(protBasis * perKg);
-    protein = Math.min(protein, r5(kcal * 0.40 / 4)); // keep it sensible at low calories
+    protein = Math.min(protein, r5(kcal * (hiP ? 0.45 : 0.40) / 4)); // keep it sensible at low calories
 
     // fat & carbs
     var fat = r5(Math.max(kcal * FATPCT[state.style] / 9, w * 0.6));
