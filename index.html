@@ -2000,7 +2000,7 @@ ${currentUser}'s real data:
 - Habit hit-rates (last 7 logs): water ${a.rates.water}%, sleep ${a.rates.sleep}%, steps ${a.rates.steps}%, fruit/veg ${a.rates.fv}%, protein target ${a.rates.protein}%, no-alcohol ${a.rates.alcohol}%, exercise ${a.rates.exercise}%
 - Last 5 logged days:
 ${a.recentText || 'No logs yet.'}
-${a.trends.hasPrev?`- Week-on-week: avg score ${a.trends.thisWeek.avg} this week vs ${a.trends.lastWeek.avg} last week; protein ${a.trends.thisWeek.protein}% vs ${a.trends.lastWeek.protein}%; no-alcohol ${a.trends.thisWeek.alcohol}% vs ${a.trends.lastWeek.alcohol}%; exercise ${a.trends.thisWeek.exercise}% vs ${a.trends.lastWeek.exercise}%`:''}
+${a.trends.hasPrev?`- Week-on-week: avg score ${a.trends.thisWeek.avg} this week vs ${a.trends.lastWeek.avg} last week; protein ${a.trends.thisWeek.protein}% vs ${a.trends.lastWeek.protein}%; no-alcohol ${a.trends.thisWeek.alcohol}% vs ${a.trends.lastWeek.alcohol}%; exercise ${a.trends.thisWeek.exercise}% vs ${a.trends.lastWeek.exercise}%`:''}${typeof lcnProfilePrompt==='function'?lcnProfilePrompt():''}
 
 What they tell you in this conversation is real information about them. Use it, remember it within the session, and treat it as seriously as the logged numbers — especially when there are few logs. Never tell them you have no information about something they have just described to you.${lastSummaryRecap_()}`;
 
@@ -2627,6 +2627,376 @@ async function endAISession(){
 })();
 </script>
 <!-- ══════════════ END PROGRESS DASHBOARD ══════════════ -->
+
+<!-- ══════════════ FIRST-RUN SETUP (ONBOARDING) ══════════════
+     Shown once to every client after they log in (existing clients too).
+     Collects: goal, a few yes/no habits, self-rated habits 1–10, body stats
+     for calorie/protein targets, and optional "about you" for the AI coach.
+     Saves: localStorage 'lcn_profile_<email>'; calorie + protein targets are
+     merged into the client's meal-plan prefs via the existing setMealPrefs
+     action; a 'setProfile' POST is also sent for the Profiles sheet (ignored
+     until the Apps Script supports it). -->
+<style>
+  .onb{position:fixed;inset:0;z-index:2000;display:flex;flex-direction:column;align-items:center;
+       background:radial-gradient(120% 70% at 50% 0%,var(--onb-glow,#2f5e14) 0%,#0f1a09 62%);
+       transition:background .5s;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:max(16px,env(safe-area-inset-top)) 16px 28px}
+  .onb[hidden]{display:none}
+  .onb-top{width:100%;max-width:460px;display:flex;align-items:center;gap:14px;margin:6px 0 22px}
+  .onb-bar{flex:1;height:6px;border-radius:99px;background:rgba(255,255,255,.18);overflow:hidden}
+  .onb-bar i{display:block;height:100%;width:0;background:var(--onb-accent,#8cc63f);border-radius:99px;transition:width .4s,background .4s}
+  .onb-skip{border:0;background:#f4f4f2;color:#1a2e0a;font:700 14px "DM Sans",sans-serif;padding:10px 16px;border-radius:99px;cursor:pointer;white-space:nowrap}
+  .onb-card{width:100%;max-width:460px;background:#fafcf8;border-radius:24px;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.35);
+            margin:auto 0;animation:onbIn .35s ease}
+  @keyframes onbIn{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:none}}
+  .onb-card::before{content:"";display:block;height:8px;background:var(--onb-accent,#8cc63f)}
+  .onb-in{padding:28px 22px 26px;text-align:center}
+  .onb-emoji{font-size:58px;line-height:1;margin:8px 0 16px}
+  .onb h2{font-family:Nunito,sans-serif;font-weight:900;font-size:24px;line-height:1.2;color:#1a2e0a;margin:0 0 10px}
+  .onb p.sub{color:#5f7350;font-size:15px;line-height:1.55;margin:0 0 20px}
+  .onb-btn{display:block;width:100%;border:0;border-radius:14px;padding:15px;font:800 16px Nunito,sans-serif;color:#fff;background:var(--onb-accent,#5a9e2f);cursor:pointer;margin-top:8px}
+  .onb-btn[disabled]{opacity:.45;cursor:default}
+  .onb-link{display:inline-block;margin-top:14px;background:none;border:0;color:#5f7350;font:600 14px "DM Sans",sans-serif;text-decoration:underline;cursor:pointer}
+  .onb-yn{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:6px}
+  .onb-yn button,.onb-opt{border:2px solid #e2ead9;background:#fff;border-radius:16px;padding:16px 10px;font:800 17px Nunito,sans-serif;color:#1a2e0a;cursor:pointer;transition:border-color .15s,background .15s}
+  .onb-yn button:active,.onb-opt:active{transform:scale(.98)}
+  .onb-yn button.sel,.onb-opt.sel{border-color:var(--onb-accent,#5a9e2f);background:#eef6e8}
+  .onb-opts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px;text-align:left}
+  .onb-opt{text-align:left;padding:14px 12px;font-size:15px}
+  .onb-opt span{display:block;font-size:24px;margin-bottom:6px}
+  .onb-opt small{display:block;font:500 12px "DM Sans",sans-serif;color:#6b7d5e;margin-top:3px;line-height:1.3}
+  .onb-sl{text-align:left;margin:4px 0 6px}
+  .onb-sl .row{display:flex;justify-content:space-between;align-items:center;font:700 15px "DM Sans",sans-serif;color:#1a2e0a;margin:14px 0 6px}
+  .onb-sl .row b{font:900 17px Nunito,sans-serif;color:var(--onb-accent,#5a9e2f);min-width:24px;text-align:right}
+  .onb-sl .hint{font:500 11.5px "DM Sans",sans-serif;color:#7a9060;margin-top:-2px}
+  .onb input[type=range]{width:100%;accent-color:var(--onb-accent,#5a9e2f);height:28px}
+  .onb-form{text-align:left}
+  .onb-form label{display:block;font:700 13px "DM Sans",sans-serif;color:#3a4a2e;margin:14px 0 6px}
+  .onb-form input,.onb-form textarea{width:100%;font:16px "DM Sans",sans-serif;padding:11px 12px;border:1.5px solid #d5e2c8;border-radius:12px;background:#fff;color:#1a2e0a}
+  .onb-form textarea{min-height:76px;resize:vertical}
+  .onb-form input:focus,.onb-form textarea:focus{outline:2px solid var(--onb-accent,#5a9e2f);border-color:transparent}
+  .onb-two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .onb-seg{display:flex;gap:4px;background:#eef1ea;border-radius:10px;padding:3px}
+  .onb-seg button{flex:1;border:0;background:transparent;border-radius:8px;padding:8px 4px;font:700 13px "DM Sans",sans-serif;color:#3a4a2e;cursor:pointer;line-height:1.2}
+  .onb-seg button.sel{background:#fff;color:#1a2e0a;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+  .onb-lblrow{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:14px 0 6px}
+  .onb-lblrow label{margin:0}
+  .onb-lblrow .onb-seg{width:150px}
+  .onb-err{color:#cc2200;font:600 13px "DM Sans",sans-serif;margin-top:10px;min-height:18px}
+  .onb-big{font:900 54px Nunito,sans-serif;color:#3d7a1a;line-height:1;margin:6px 0 2px}
+  .onb-tiles{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:16px 0 6px}
+  .onb-tiles div{border:1.5px solid #e2ead9;border-radius:12px;padding:10px 4px;background:#fff}
+  .onb-tiles b{display:block;font:900 20px Nunito,sans-serif;color:#1a2e0a}
+  .onb-tiles small{font:600 11.5px "DM Sans",sans-serif;color:#6b7d5e}
+  .onb-note{background:#eef6e8;border-radius:12px;padding:10px 12px;font:500 13px "DM Sans",sans-serif;color:#3a4a2e;text-align:left;margin-top:12px;line-height:1.45}
+  .onb-warn{background:#fff6e0;border-radius:12px;padding:10px 12px;font:500 13px "DM Sans",sans-serif;color:#5a4400;text-align:left;margin-top:12px;line-height:1.45}
+  .onb-dots{display:flex;gap:8px;justify-content:center;margin:20px 0 4px}
+  .onb-dots i{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.28)}
+  .onb-dots i.on{background:#fff}
+  .onb-reopen{display:block;margin:4px auto 14px;background:none;border:0;color:var(--muted);font:600 13px "DM Sans",sans-serif;text-decoration:underline;cursor:pointer}
+  @media(max-width:380px){.onb h2{font-size:21px}.onb-emoji{font-size:50px}.onb-opts{grid-template-columns:1fr}}
+</style>
+
+<div class="onb" id="onb" hidden role="dialog" aria-modal="true" aria-label="Set up your plan">
+  <div class="onb-top"><div class="onb-bar"><i id="onb-bar"></i></div><button class="onb-skip" id="onb-skip" type="button">Skip for now 👉</button></div>
+  <div class="onb-card" id="onb-card"></div>
+  <div class="onb-dots" id="onb-dots"></div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  /* ── colours per step (glow behind the card, accent strip/buttons) ── */
+  var THEMES=[
+    {glow:'#2f5e14',acc:'#5a9e2f'},{glow:'#3d6b12',acc:'#8cc63f'},{glow:'#1d4d3b',acc:'#2a9d6e'},
+    {glow:'#4d3a10',acc:'#d39a00'},{glow:'#4a1f14',acc:'#cc2200'},{glow:'#1d3a4d',acc:'#2f86c4'},
+    {glow:'#2f5e14',acc:'#5a9e2f'},{glow:'#3d7a1a',acc:'#3d7a1a'},{glow:'#2e2a4d',acc:'#6b5bd6'},{glow:'#2f5e14',acc:'#5a9e2f'}
+  ];
+  var HABITS=[
+    {k:'water',   e:'💧',l:'Water'},
+    {k:'protein', e:'🥩',l:'Protein'},
+    {k:'sleep',   e:'😴',l:'Sleep'},
+    {k:'steps',   e:'👟',l:'Steps & daily movement'},
+    {k:'fv',      e:'🥦',l:'Fruit & veg'},
+    {k:'exercise',e:'🏋️',l:'Exercise'},
+    {k:'alcohol', e:'🍷',l:'Alcohol',hint:'10 = rarely or never drink'}
+  ];
+  var GOALS={lose:{e:'🔥',l:'Lose fat'},maintain:{e:'⚖️',l:'Maintain & feel better'},gain:{e:'💪',l:'Build muscle'},energy:{e:'⚡',l:'More energy'}};
+  var YN=[
+    {k:'skipsMeals',e:'⏰',q:'Do you often skip meals when you’re busy?'},
+    {k:'trackedBefore',e:'📱',q:'Have you tracked your food before?'},
+    {k:'weekendsOff',e:'🍕',q:'Do weekends usually throw you off track?'}
+  ];
+
+  var p=null, step=0, STEPS=['welcome','goal','yn0','yn1','yn2','rate','body','targets','about','done'];
+  var el=function(id){return document.getElementById(id);};
+  var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});};
+
+  function key(){ return 'lcn_profile_'+currentEmail; }
+  function loadLocal(){ try{ var v=localStorage.getItem(key()); return v?JSON.parse(v):null; }catch(e){ return null; } }
+  function saveLocal(obj){ try{ localStorage.setItem(key(),JSON.stringify(obj)); }catch(e){} }
+  window.lcnProfile=function(){ return currentEmail?loadLocal():null; };
+
+  /* ── maths (same rules as the public Calorie & Macro Calculator) ── */
+  var JOB={desk:1.2,mixed:1.3,feet:1.4,physical:1.55}, TRAIN={'0':0,'2':0.075,'4':0.15,'6':0.225};
+  function r5(x){return Math.round(x/5)*5;} function r10(x){return Math.round(x/10)*10;}
+  function calcTargets(b,goalKey){
+    var w=b.weightKg,h=b.heightCm,goal=(goalKey==='lose'||goalKey==='gain')?goalKey:'maintain',note='';
+    var bmi=w/Math.pow(h/100,2);
+    var bmr=10*w+6.25*h-5*b.age+(b.sex==='m'?5:-161);
+    var tdee=bmr*Math.min(2,JOB[b.job]+TRAIN[b.train]), kcal=tdee;
+    if(goal==='lose'&&bmi<18.5){goal='maintain';note='low-bmi';}
+    if(goal==='lose'){
+      var def=Math.min(w*(b.pace==='faster'?0.0075:0.005)*1100,tdee*0.25);
+      kcal=Math.max(tdee-def,Math.max(b.sex==='m'?1500:1200,bmr));
+      if(kcal>=tdee-50){kcal=tdee;goal='maintain';note='near-floor';}
+    }else if(goal==='gain'){
+      kcal=tdee+Math.min(500,w*(b.pace==='faster'?0.005:0.0025)*1100);
+    }
+    kcal=r10(kcal);
+    var basis=bmi>30?25*Math.pow(h/100,2):w;
+    var protein=Math.min(r5(basis*(goal==='lose'?2.0:1.8)),r5(kcal*0.40/4));
+    var fat=r5(Math.max(kcal*0.30/9,basis*0.6));
+    var carbs=r5(Math.max(0,(kcal-protein*4-fat*9)/4));
+    return {kcal:kcal,tdee:r10(tdee),protein:protein,carbs:carbs,fat:fat,goalUsed:goal,note:note};
+  }
+
+  /* ── rendering ── */
+  function setTheme(){
+    var t=THEMES[step]||THEMES[0], o=el('onb');
+    o.style.setProperty('--onb-glow',t.glow); o.style.setProperty('--onb-accent',t.acc);
+    el('onb-bar').style.width=Math.round(step/(STEPS.length-1)*100)+'%';
+    el('onb-dots').innerHTML=STEPS.map(function(_,i){return '<i class="'+(i<=step?'on':'')+'"></i>';}).join('');
+    el('onb-skip').style.visibility=(STEPS[step]==='done')?'hidden':'visible';
+  }
+  function go(n){ step=Math.max(0,Math.min(STEPS.length-1,n)); render(); el('onb').scrollTop=0; }
+  function next(){ go(step+1); }
+
+  function render(){
+    setTheme();
+    var s=STEPS[step], c=el('onb-card'), h='';
+    var first=esc((currentUser||'').split(' ')[0]);
+    if(s==='welcome'){
+      h='<div class="onb-emoji">👋</div><h2>Let’s find your starting point'+(first?', '+first:'')+'</h2>'+
+        '<p class="sub">A few quick taps, mostly no typing. Your coach uses this to know where to start, and we’ll work out your calorie and protein targets too. About a minute.</p>'+
+        '<button class="onb-btn" data-act="next">Let’s go →</button>';
+    }
+    else if(s==='goal'){
+      h='<div class="onb-emoji">🎯</div><h2>What’s your main goal right now?</h2><div class="onb-opts">'+
+        Object.keys(GOALS).map(function(k){var g=GOALS[k];return '<button class="onb-opt'+(p.goal===k?' sel':'')+'" data-goal="'+k+'"><span>'+g.e+'</span>'+g.l+'</button>';}).join('')+'</div>';
+    }
+    else if(s.indexOf('yn')===0){
+      var y=YN[+s.slice(2)], v=p.answers[y.k];
+      h='<div class="onb-emoji">'+y.e+'</div><h2>'+y.q+'</h2><div class="onb-yn">'+
+        '<button data-yn="yes" class="'+(v==='yes'?'sel':'')+'">✓&nbsp; Yes</button><button data-yn="no" class="'+(v==='no'?'sel':'')+'">✕&nbsp; No</button></div>';
+    }
+    else if(s==='rate'){
+      h='<h2>How are these habits right now?</h2><p class="sub" style="margin-bottom:6px">Drag each slider. Be honest: this is just your starting line.</p><div class="onb-sl">'+
+        HABITS.map(function(x){var v=p.ratings[x.k];return '<div class="row"><span>'+x.e+' '+x.l+'</span><b id="onb-v-'+x.k+'">'+v+'</b></div>'+
+          (x.hint?'<div class="hint">'+x.hint+'</div>':'')+
+          '<input type="range" min="1" max="10" step="1" value="'+v+'" data-rate="'+x.k+'" aria-label="'+x.l+'">';}).join('')+
+        '</div><button class="onb-btn" data-act="next">Continue →</button>';
+    }
+    else if(s==='body'){
+      var b=p.body;
+      var paceRow=(p.goal==='lose'||p.goal==='gain')?
+        '<label>How quickly?</label><div class="onb-seg" data-seg="pace"><button data-v="steady" class="'+(b.pace!=='faster'?'sel':'')+'">Steady</button><button data-v="faster" class="'+(b.pace==='faster'?'sel':'')+'">Faster</button></div>':'';
+      h='<div class="onb-emoji" style="font-size:46px">📏</div><h2>Your calorie &amp; protein targets</h2><p class="sub" style="margin-bottom:4px">A few details so we can work out how much to eat for your goal.</p>'+
+        '<div class="onb-form">'+
+        '<label>Sex</label><div class="onb-seg" data-seg="sex"><button data-v="f" class="'+(b.sex==='f'?'sel':'')+'">Female</button><button data-v="m" class="'+(b.sex==='m'?'sel':'')+'">Male</button></div>'+
+        '<label for="onb-age">Age</label><input id="onb-age" type="number" inputmode="numeric" placeholder="35" value="'+(b.age||'')+'">'+
+        '<div class="onb-lblrow"><label>Height</label><div class="onb-seg" data-seg="hunit"><button data-v="cm" class="'+(b.hunit!=='ft'?'sel':'')+'">cm</button><button data-v="ft" class="'+(b.hunit==='ft'?'sel':'')+'">ft / in</button></div></div>'+
+        (b.hunit==='ft'?'<div class="onb-two"><input id="onb-hft" type="number" inputmode="numeric" placeholder="ft" value="'+(b.hft||'')+'"><input id="onb-hin" type="number" inputmode="decimal" placeholder="in" value="'+(b.hin||'')+'"></div>'
+                       :'<input id="onb-hcm" type="number" inputmode="decimal" placeholder="cm" value="'+(b.hcm||'')+'">')+
+        '<div class="onb-lblrow"><label>Weight</label><div class="onb-seg" data-seg="wunit" style="width:190px"><button data-v="kg" class="'+(b.wunit!=='st'&&b.wunit!=='lb'?'sel':'')+'">kg</button><button data-v="st" class="'+(b.wunit==='st'?'sel':'')+'">st / lb</button><button data-v="lb" class="'+(b.wunit==='lb'?'sel':'')+'">lb</button></div></div>'+
+        (b.wunit==='st'?'<div class="onb-two"><input id="onb-wst" type="number" inputmode="numeric" placeholder="st" value="'+(b.wst||'')+'"><input id="onb-wstlb" type="number" inputmode="decimal" placeholder="lb" value="'+(b.wstlb||'')+'"></div>'
+         :b.wunit==='lb'?'<input id="onb-wlb" type="number" inputmode="decimal" placeholder="lb" value="'+(b.wlb||'')+'">'
+         :'<input id="onb-wkg" type="number" inputmode="decimal" placeholder="kg" value="'+(b.wkg||'')+'">')+
+        '<label>Your work or day-to-day</label><div class="onb-seg" data-seg="job"><button data-v="desk" class="'+(b.job==='desk'?'sel':'')+'">Mostly sitting</button><button data-v="mixed" class="'+(b.job==='mixed'?'sel':'')+'">Mixed</button><button data-v="feet" class="'+(b.job==='feet'?'sel':'')+'">On feet</button><button data-v="physical" class="'+(b.job==='physical'?'sel':'')+'">Physical</button></div>'+
+        '<label>Workouts per week</label><div class="onb-seg" data-seg="train"><button data-v="0" class="'+(b.train==='0'?'sel':'')+'">0</button><button data-v="2" class="'+(b.train==='2'?'sel':'')+'">1–2</button><button data-v="4" class="'+(b.train==='4'?'sel':'')+'">3–4</button><button data-v="6" class="'+(b.train==='6'?'sel':'')+'">5+</button></div>'+
+        paceRow+
+        '</div><div class="onb-err" id="onb-err"></div>'+
+        '<button class="onb-btn" data-act="calc">Work out my targets →</button>'+
+        '<button class="onb-link" data-act="skipbody">I’d rather skip this</button>';
+    }
+    else if(s==='targets'){
+      var t=p.targets;
+      if(!t){ h='<div class="onb-emoji">👍</div><h2>No problem</h2><p class="sub">You can add your targets any time from your meal-plan settings, or ask your coach.</p><button class="onb-btn" data-act="next">Continue →</button>'; }
+      else{
+        var goalTxt=t.goalUsed==='lose'?'to lose fat':t.goalUsed==='gain'?'to build muscle':'to maintain your weight';
+        h='<div class="onb-emoji" style="font-size:46px">🎯</div><h2>Your starting targets</h2>'+
+          '<div class="onb-big">'+t.kcal.toLocaleString('en-IE')+'</div><div style="font:700 14px \'DM Sans\',sans-serif;color:#5f7350">calories a day '+goalTxt+'</div>'+
+          '<div class="onb-tiles"><div><b>'+t.protein+'g</b><small>Protein</small></div><div><b>'+t.carbs+'g</b><small>Carbs</small></div><div><b>'+t.fat+'g</b><small>Fat</small></div></div>'+
+          (t.note==='low-bmi'?'<div class="onb-warn">Your BMI is already on the low side, so we’ve set maintenance calories rather than a fat-loss target. Focus on protein and strength training, and chat to your coach about shaping goals.</div>':'')+
+          (t.note==='near-floor'?'<div class="onb-warn">Your maintenance calories are already close to a safe minimum, so we’ve set maintenance rather than cutting further. More daily movement is the healthier way to create a deficit.</div>':'')+
+          '<div class="onb-note">✅ Your <b>protein target</b> is the one to focus on: '+t.protein+'g a day. We’ve added these numbers to your meal-plan settings. They’re estimates: follow them for 2–3 weeks and your coach will help you adjust.</div>'+
+          '<button class="onb-btn" data-act="next">Continue →</button>';
+      }
+    }
+    else if(s==='about'){
+      var a=p.about;
+      h='<div class="onb-emoji" style="font-size:46px">💬</div><h2>Tell your coach about you</h2><p class="sub" style="margin-bottom:4px">Optional, but the more your coach knows, the better it can help.</p>'+
+        '<div class="onb-form"><label for="onb-work">What do you do for work?</label><input id="onb-work" maxlength="80" placeholder="e.g. Nurse on night shifts, office job, parent at home…" value="'+esc(a.work)+'">'+
+        '<label for="onb-chal">What’s your biggest challenge with food right now?</label><textarea id="onb-chal" maxlength="300" placeholder="e.g. Snacking in the evenings, no time to cook, eating out a lot…">'+esc(a.challenge)+'</textarea></div>'+
+        '<button class="onb-btn" data-act="about">Save &amp; continue →</button><button class="onb-link" data-act="aboutskip">Skip — I’ll tell my coach directly</button>';
+    }
+    else if(s==='done'){
+      var wk=weakest();
+      h='<div class="onb-emoji">🎉</div><h2>You’re all set'+(first?', '+first:'')+'.</h2>'+
+        '<p class="sub">Looks like <b>'+esc(wk.l.toLowerCase())+'</b> could use the most attention. Let’s start there.</p>'+
+        '<button class="onb-btn" data-act="coach">Meet your coach →</button><button class="onb-link" data-act="finish">Go to today’s log instead</button>';
+    }
+    c.innerHTML='<div class="onb-in">'+h+'</div>';
+    c.style.animation='none'; void c.offsetWidth; c.style.animation='';
+  }
+
+  function weakest(){
+    var lowest=HABITS[0];
+    HABITS.forEach(function(x){ if(p.ratings[x.k]<p.ratings[lowest.k]) lowest=x; });
+    return lowest;
+  }
+
+  function num(id){ var i=el(id); if(!i||i.value==='') return null; var v=parseFloat(String(i.value).replace(',','.')); return isNaN(v)?null:v; }
+  function readBody(){
+    var b=p.body;
+    b.age=num('onb-age');
+    if(b.hunit==='ft'){ b.hft=num('onb-hft'); b.hin=num('onb-hin'); b.heightCm=b.hft==null?null:(b.hft*12+(b.hin||0))*2.54; }
+    else { b.hcm=num('onb-hcm'); b.heightCm=b.hcm; }
+    if(b.wunit==='st'){ b.wst=num('onb-wst'); b.wstlb=num('onb-wstlb'); b.weightKg=b.wst==null?null:(b.wst*14+(b.wstlb||0))*0.45359237; }
+    else if(b.wunit==='lb'){ b.wlb=num('onb-wlb'); b.weightKg=b.wlb==null?null:b.wlb*0.45359237; }
+    else { b.wkg=num('onb-wkg'); b.weightKg=b.wkg; }
+  }
+  function bodyError(){
+    var b=p.body;
+    if(!b.sex) return 'Please choose female or male. It’s used in the energy equation.';
+    if(b.age==null) return 'Please add your age.';
+    if(b.age<18) return 'Calorie targets are designed for adults (18+). Tap “I’d rather skip this” and your coach will help instead.';
+    if(b.age>80) return 'Please enter an age between 18 and 80.';
+    if(!b.heightCm||b.heightCm<130||b.heightCm>230) return 'Please check your height.';
+    if(!b.weightKg||b.weightKg<35||b.weightKg>300) return 'Please check your weight.';
+    if(!b.job) return 'Please choose what your day-to-day looks like.';
+    if(b.train==null) return 'Please choose how many workouts you do a week.';
+    return null;
+  }
+
+  /* ── saving ── */
+  function persist(){ p.updatedAt=new Date().toISOString(); saveLocal(p); }
+  function sendProfile(){
+    try{
+      fetch(SCRIPT_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},
+        body:JSON.stringify({action:'setProfile',email:currentEmail,name:currentUser,profile:p})});
+    }catch(e){}
+  }
+  async function pushTargetsToMealPrefs(t){
+    try{
+      var res=await fetchT(SCRIPT_URL+'?action=getMealPrefs&email='+encodeURIComponent(currentEmail),{},10000);
+      var existing=await res.json();             // throws → leave prefs alone
+      var base=(existing&&typeof existing==='object')?existing:{};
+      var merged={
+        household:base.household||'1', scope:base.scope||'Dinners only', dinners:base.dinners||'5',
+        time:base.time||'30', style:base.style||'Balanced', avoid:base.avoid||'',
+        variety:base.variety||'Keep it simple — repeats are fine',
+        cals:String(t.kcal), protein:String(t.protein)
+      };
+      await fetch(SCRIPT_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},
+        body:JSON.stringify({action:'setMealPrefs',email:currentEmail,prefs:merged})});
+      if(typeof mealPrefs!=='undefined') mealPrefs=merged;
+      p.mealPrefsUpdated=true; persist();
+    }catch(e){ /* couldn't read existing prefs safely — don't overwrite them */ }
+  }
+
+  function close(){ el('onb').hidden=true; document.body.style.overflow=''; }
+  function finish(toCoach){
+    p.completedAt=p.completedAt||new Date().toISOString(); delete p.skippedAt;
+    persist(); sendProfile(); close();
+    if(toCoach){
+      var btn=document.querySelector('.tab[onclick*="aicoach"]');
+      if(btn) switchTab('aicoach',btn);
+    }
+  }
+
+  /* ── events ── */
+  el('onb-card').addEventListener('click',function(ev){
+    var t=ev.target.closest('button'); if(!t) return;
+    if(t.dataset.goal){ p.goal=t.dataset.goal; persist(); setTimeout(next,180); render(); return; }
+    if(t.dataset.yn){ var y=YN[+STEPS[step].slice(2)]; p.answers[y.k]=t.dataset.yn; persist(); render(); setTimeout(next,220); return; }
+    var seg=t.closest('[data-seg]');
+    if(seg){ if(STEPS[step]==='body') readBody(); p.body[seg.dataset.seg]=t.dataset.v; render(); return; }
+    var act=t.dataset.act;
+    if(act==='next') next();
+    else if(act==='calc'){
+      readBody(); var e=bodyError();
+      if(e){ el('onb-err').textContent=e; return; }
+      p.targets=calcTargets(p.body,p.goal); persist(); pushTargetsToMealPrefs(p.targets); next();
+    }
+    else if(act==='skipbody'){ p.targets=null; persist(); next(); }
+    else if(act==='about'){ p.about={work:(el('onb-work').value||'').trim(),challenge:(el('onb-chal').value||'').trim()}; persist(); next(); }
+    else if(act==='aboutskip'){ next(); }
+    else if(act==='coach') finish(true);
+    else if(act==='finish') finish(false);
+  });
+  el('onb-card').addEventListener('input',function(ev){
+    var r=ev.target.dataset&&ev.target.dataset.rate;
+    if(r){ p.ratings[r]=+ev.target.value; var v=el('onb-v-'+r); if(v) v.textContent=ev.target.value; }
+  });
+  el('onb-card').addEventListener('change',function(ev){ if(ev.target.dataset&&ev.target.dataset.rate) persist(); });
+  el('onb-skip').addEventListener('click',function(){
+    if(STEPS[step]==='body') readBody();
+    p.skippedAt=new Date().toISOString(); persist(); close();
+  });
+
+  /* ── open / decide whether to show ── */
+  function fresh(){
+    var r={}; HABITS.forEach(function(x){r[x.k]=5;});
+    return {v:1,goal:null,answers:{},ratings:r,body:{hunit:'cm',wunit:'kg',pace:'steady'},targets:null,about:{work:'',challenge:''}};
+  }
+  window.openOnboarding=function(){
+    if(!currentEmail) return;
+    var saved=loadLocal(); p=saved||fresh();
+    p.answers=p.answers||{}; p.ratings=p.ratings||fresh().ratings; p.body=p.body||fresh().body; p.about=p.about||{work:'',challenge:''};
+    step=0; el('onb').hidden=false; document.body.style.overflow='hidden'; render();
+  };
+  var SKIP_DAYS=3;
+  function maybeStart(){
+    if(!currentEmail) return;
+    var saved=loadLocal();
+    if(saved&&saved.completedAt) return;
+    if(saved&&saved.skippedAt&&(Date.now()-Date.parse(saved.skippedAt))<SKIP_DAYS*864e5) return;
+    /* Already completed on another phone? (Needs the Apps Script getProfile
+       action — until that exists this quietly fails and the setup shows.) */
+    fetchT(SCRIPT_URL+'?action=getProfile&email='+encodeURIComponent(currentEmail),{},6000)
+      .then(function(r){return r.json();})
+      .then(function(j){ if(j&&j.completedAt){ saveLocal(j); } else openOnboarding(); })
+      .catch(function(){ openOnboarding(); });
+  }
+
+  /* ── AI coach: add the setup answers to the coach's background brief ── */
+  window.lcnProfilePrompt=function(){
+    var q=loadLocal(); if(!q||(!q.completedAt&&!q.goal)) return '';
+    var lines=[];
+    if(q.goal) lines.push('- Main goal: '+GOALS[q.goal].l);
+    YN.forEach(function(y){ if(q.answers&&q.answers[y.k]) lines.push('- '+y.q.replace('?','')+': '+q.answers[y.k]); });
+    if(q.ratings) lines.push('- Self-rated habits at setup (1-10): '+HABITS.map(function(x){return x.l.toLowerCase()+' '+q.ratings[x.k];}).join(', ')+' (alcohol: 10 = rarely drinks)');
+    if(q.ratings){ var lo=HABITS[0]; HABITS.forEach(function(x){ if(q.ratings[x.k]<q.ratings[lo.k]) lo=x; }); lines.push('- Lowest self-rated habit: '+lo.l.toLowerCase()); }
+    if(q.targets) lines.push('- Starting targets: '+q.targets.kcal+' kcal/day, '+q.targets.protein+' g protein, '+q.targets.carbs+' g carbs, '+q.targets.fat+' g fat (maintenance about '+q.targets.tdee+' kcal)');
+    if(q.about&&q.about.work) lines.push('- Work: '+q.about.work);
+    if(q.about&&q.about.challenge) lines.push('- Biggest challenge with food (their words): '+q.about.challenge);
+    if(!lines.length) return '';
+    return '\n\nWhat '+currentUser+' told you in their app setup ('+String(q.completedAt||q.updatedAt||'').slice(0,10)+'):\n'+lines.join('\n')+
+      '\nUse this to personalise, especially while they have few logs. If their logged data now disagrees with how they rated themselves, gently point that out.';
+  };
+
+  /* ── hook into login ── */
+  var _show=showApp;
+  showApp=function(){ _show.apply(this,arguments); setTimeout(maybeStart,400); };
+  if(currentEmail && document.getElementById('app-section').style.display==='block') setTimeout(maybeStart,400);
+
+  /* "Redo my setup" link at the top of the AI Coach tab */
+  var tab=el('tab-aicoach');
+  if(tab){ var b=document.createElement('button'); b.className='onb-reopen'; b.type='button'; b.textContent='⚙️ Redo my setup & targets';
+    b.addEventListener('click',function(){ openOnboarding(); }); var lbl=tab.querySelector('.section-label'); tab.insertBefore(b,lbl?lbl.nextSibling:tab.firstChild); }
+})();
+</script>
+<!-- ══════════════ END FIRST-RUN SETUP ══════════════ -->
 
 </body>
 </html>
