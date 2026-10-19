@@ -1,6 +1,6 @@
 // LCN Coach — service worker
 // Bump CACHE_NAME whenever you want clients to drop cached static assets.
-const CACHE_NAME = 'lcn-coach-v4';
+const CACHE_NAME = 'lcn-coach-v5';
 
 // How long to wait for a fresh index.html before giving up and using the
 // cached copy. Long enough that a normal connection always wins; short
@@ -64,6 +64,15 @@ self.addEventListener('fetch', (event) => {
      immediately. A slow or dead one falls back to the cached copy, which
      is exactly the old behaviour. The cache is refreshed either way. */
   if (request.mode === 'navigate') {
+    /* Only the app itself. Every page on this domain sits inside the worker's
+       scope — /coach/, /protein-score/, /macro-calculator/ — and this block
+       used to store whatever page was opened as './index.html'. Open the
+       coach portal once and the app could then launch as the portal. Other
+       pages now go straight to the network, untouched. */
+    const scopePath = new URL(self.registration.scope).pathname;
+    if (url.pathname !== scopePath && url.pathname !== scopePath + 'index.html') {
+      return;
+    }
     event.respondWith(
       caches.open(CACHE_NAME).then((cache) =>
         cache.match('./index.html').then((cached) => {
