@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#3d7a1a">
+<title>Lean Comp · Coach Portal</title>
+<link rel="icon" href="../favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://script.google.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --green:#5a9e2f;--green-dark:#3d7a1a;--green-light:#eaf5e0;--lime:#8cc63f;
+    --red:#cc2200;--amber:#c98a00;--amber-light:#fff4d6;--white:#fff;
+    --bg:#f4f9f0;--card:#fff;--border:#ddeece;--border2:#c9dfb6;
+    --text:#1a2e0a;--muted:#6f8656;--shadow:0 2px 12px rgba(90,158,47,.10);
+  }
+  html{background:var(--bg)}
+  body{background:var(--bg);color:var(--text);font-family:"DM Sans",sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased}
+  button{font-family:inherit;cursor:pointer}
+  button:active{transform:scale(.97)}
+  a{color:var(--green-dark)}
+
+  /* ── top bar ── */
+  .top{background:var(--white);border-bottom:3px solid var(--green);position:sticky;top:0;z-index:50;box-shadow:var(--shadow)}
+  .top-in{max-width:1180px;margin:0 auto;padding:8px 16px;display:flex;align-items:center;gap:12px}
+  .top img{height:46px;width:auto}
+  .top .t{font-family:"Nunito",sans-serif;font-weight:900;font-size:18px;color:var(--green-dark);line-height:1.1}
+  .top .t span{display:block;font-size:10.5px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+  .top .sp{flex:1}
+  .top .upd{font-size:11.5px;color:var(--muted);text-align:right}
+  .ibtn{background:var(--white);border:1.5px solid var(--border);border-radius:10px;color:var(--green-dark);font-weight:700;font-size:13px;padding:8px 12px;white-space:nowrap}
+  .ibtn:hover{border-color:var(--green)}
+
+  .wrap{max-width:1180px;margin:0 auto;padding:20px 16px 60px}
+
+  /* ── login ── */
+  .login{max-width:400px;margin:40px auto;background:var(--card);border:1px solid var(--border);border-top:4px solid var(--green);border-radius:20px;padding:28px 22px;text-align:center;box-shadow:var(--shadow)}
+  .login img{height:84px;margin-bottom:10px}
+  .login h1{font-family:"Nunito",sans-serif;font-size:24px;font-weight:900;color:var(--green-dark)}
+  .login p{font-size:13.5px;color:var(--muted);margin:4px 0 20px}
+  .dots{display:flex;justify-content:center;gap:16px;margin-bottom:22px}
+  .dot{width:18px;height:18px;border-radius:50%;border:2px solid var(--border2);transition:all .15s}
+  .dot.f{background:var(--green);border-color:var(--green)}
+  .dot.bad{background:var(--red);border-color:var(--red)}
+  .pad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:300px;margin:0 auto}
+  .key{background:#f8fdf4;border:2px solid var(--border);border-radius:16px;font-family:"Nunito",sans-serif;font-size:28px;font-weight:800;color:var(--green-dark);min-height:70px}
+  .key:hover{border-color:var(--green);background:var(--green-light)}
+  .key.sm{font-size:20px;color:var(--muted)}
+  .lerr{min-height:20px;margin-top:14px;font-size:13px;font-weight:700;color:var(--red)}
+  .lerr.info{color:var(--muted)}
+
+  /* ── overview tiles ── */
+  .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+  .tile{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px 16px;box-shadow:var(--shadow);text-align:left;color:var(--text)}
+  button.tile:hover{border-color:var(--green)}
+  .tile .k{font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted)}
+  .tile .v{font-family:"Nunito",sans-serif;font-size:32px;font-weight:900;color:var(--green-dark);line-height:1.1;margin-top:4px}
+  .tile .v small{font-size:15px;color:var(--muted);font-weight:700}
+  .tile .s{font-size:12px;color:var(--muted);margin-top:2px}
+  .tile.warn .v{color:var(--amber)}
+
+  /* ── view tabs ── */
+  .vtabs{display:flex;gap:6px;margin-bottom:14px;border-bottom:2px solid var(--border)}
+  .vtab{background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-2px;padding:10px 14px;font-family:"Nunito",sans-serif;font-size:15px;font-weight:800;color:var(--muted)}
+  .vtab.on{color:var(--green-dark);border-bottom-color:var(--green)}
+  .vtab .n{font-size:11px;background:var(--green-light);color:var(--green-dark);border-radius:10px;padding:1px 7px;margin-left:4px;vertical-align:2px}
+
+  .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+  .search{flex:1 1 220px;background:var(--white);border:1.5px solid var(--border);border-radius:12px;padding:10px 14px;font-size:15px;font-family:inherit;color:var(--text);outline:none}
+  .search:focus{border-color:var(--green)}
+  .chip{background:var(--white);border:1.5px solid var(--border);border-radius:20px;padding:7px 13px;font-size:12.5px;font-weight:700;color:var(--muted)}
+  .chip.on{background:var(--green);border-color:var(--green);color:#fff}
+  .chip .n{opacity:.8;font-weight:600}
+  select.sort{background:var(--white);border:1.5px solid var(--border);border-radius:12px;padding:9px 10px;font-size:13px;font-family:inherit;color:var(--text)}
+
+  /* ── client rows ── */
+  .rows{display:flex;flex-direction:column;gap:8px}
+  .rhead,.row{display:grid;grid-template-columns:minmax(170px,2.2fr) 1fr .8fr 1.2fr 1.4fr 1.2fr 20px;gap:12px;align-items:center}
+  .rhead{padding:0 16px 2px;font-size:10.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+  .row{background:var(--card);border:1px solid var(--border);border-left:4px solid var(--green);border-radius:14px;padding:11px 16px;box-shadow:var(--shadow);text-align:left;width:100%;color:var(--text)}
+  .row:hover{border-color:var(--border2);background:#fbfef8}
+  .row.quiet{border-left-color:var(--amber)}
+  .row.gone{border-left-color:#a0522d}
+  .nm{font-weight:800;font-size:15px;line-height:1.25;overflow:hidden;text-overflow:ellipsis}
+  .em{font-size:11.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tag{display:inline-block;font-size:10.5px;font-weight:700;border-radius:10px;padding:2px 8px;margin-top:3px;background:var(--green-light);color:var(--green-dark)}
+  .tag.amber{background:var(--amber-light);color:#8a5d00}
+  .tag.grey{background:#eef1ea;color:var(--muted)}
+  .cell .big{font-family:"Nunito",sans-serif;font-weight:900;font-size:17px}
+  .cell .sm{font-size:11.5px;color:var(--muted)}
+  .up{color:var(--green-dark)} .down{color:#a07800} .flat{color:var(--muted)}
+  .lbl{display:none}
+  .chev{color:var(--border2);font-size:22px;font-weight:700}
+  .empty{text-align:center;color:var(--muted);padding:40px 16px;font-size:14px;background:var(--card);border:1px dashed var(--border2);border-radius:14px}
+
+  /* ── activity feed ── */
+  .log{background:var(--card);border:1px solid var(--border);border-left:4px solid var(--green);border-radius:12px;padding:12px 14px;box-shadow:var(--shadow)}
+  .log-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+  .log-n{font-weight:800;font-size:15px}
+  .log-n button{background:none;border:none;font:inherit;color:var(--green-dark);padding:0;text-align:left}
+  .log-n button:hover{text-decoration:underline}
+  .log-d{font-size:11.5px;color:var(--muted)}
+  .log-s{font-family:"Nunito",sans-serif;font-size:21px;font-weight:900}
+  .sbar{height:5px;background:#e8f5dc;border-radius:4px;margin:8px 0;overflow:hidden}
+  .sbar i{display:block;height:100%;border-radius:4px}
+  .habs{display:flex;flex-wrap:wrap;gap:5px}
+  .hab{font-size:10.5px;font-weight:700;letter-spacing:.3px;padding:3px 8px;border-radius:20px;text-transform:uppercase;background:var(--green-light);color:var(--green-dark)}
+  .hab.miss{background:#ffeee8;color:#aa3300}
+  .note{font-size:12.5px;color:var(--muted);font-style:italic;margin-top:7px;line-height:1.45}
+  .more{width:100%;margin-top:10px;background:var(--white);border:1.5px solid var(--border);border-radius:12px;padding:11px;font-weight:700;color:var(--green-dark)}
+
+  /* ── client drawer ── */
+  .scrim{position:fixed;inset:0;background:rgba(20,40,10,.35);z-index:80;opacity:0;pointer-events:none;transition:opacity .2s}
+  .scrim.on{opacity:1;pointer-events:auto}
+  .drawer{position:fixed;top:0;right:0;bottom:0;width:min(620px,100%);background:var(--bg);z-index:90;transform:translateX(100%);transition:transform .25s cubic-bezier(.2,.8,.3,1);overflow-y:auto;overscroll-behavior:contain;box-shadow:-8px 0 30px rgba(0,0,0,.12)}
+  .drawer.on{transform:none}
+  .dh{position:sticky;top:0;z-index:2;background:var(--white);border-bottom:3px solid var(--green);padding:12px 16px;display:flex;align-items:center;gap:12px}
+  .dh .back{width:40px;height:40px;border-radius:50%;border:1.5px solid var(--border);background:var(--white);font-size:18px;color:var(--green-dark);flex:0 0 40px}
+  .dh .nm{font-family:"Nunito",sans-serif;font-size:20px;font-weight:900;color:var(--green-dark)}
+  .db{padding:16px 16px 50px}
+  .sec{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px 16px;box-shadow:var(--shadow);margin-bottom:12px}
+  .sec h3{font-family:"Nunito",sans-serif;font-size:13px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--green-dark);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .sec h3 small{font-family:"DM Sans",sans-serif;font-size:11.5px;letter-spacing:0;text-transform:none;font-weight:600;color:var(--muted)}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+  .kpi{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:10px 8px;text-align:center;box-shadow:var(--shadow)}
+  .kpi b{display:block;font-family:"Nunito",sans-serif;font-size:22px;font-weight:900;color:var(--green-dark);line-height:1.1}
+  .kpi span{font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--muted)}
+  .kpi i{display:block;font-style:normal;font-size:11px;font-weight:700;margin-top:1px}
+  .hr{display:grid;grid-template-columns:110px 1fr 54px;gap:10px;align-items:center;margin-bottom:7px;font-size:13px}
+  .hr .tr{height:10px;background:#edf3e6;border-radius:6px;overflow:hidden}
+  .hr .tr i{display:block;height:100%;border-radius:6px;background:var(--green)}
+  .hr .pc{text-align:right;font-weight:800;font-size:12.5px}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13.5px;line-height:1.45}
+  .kv dt{color:var(--muted);font-weight:600}
+  .kv dd{font-weight:600}
+  .quote{background:var(--green-light);border-radius:10px;padding:10px 12px;font-size:13.5px;line-height:1.5;margin-top:10px}
+  .bcm{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+  .bcm button{background:var(--white);border:2px solid var(--border);border-radius:12px;padding:8px 10px;text-align:left;color:var(--text)}
+  .bcm button.on{border-color:var(--green);background:var(--green-light)}
+  .bcm .l{font-size:11px;font-weight:700;color:var(--muted)}
+  .bcm .v{font-family:"Nunito",sans-serif;font-size:19px;font-weight:900}
+  .bcm .c{font-size:11px;font-weight:700}
+  svg.ch{display:block;width:100%;height:auto}
+  .chempty{font-size:12.5px;color:var(--muted);text-align:center;padding:18px}
+
+  /* ── body comp table ── */
+  .brow{display:grid;grid-template-columns:minmax(160px,2fr) 1fr 1fr 1fr 1fr 1.1fr 20px;gap:12px;align-items:center}
+
+  @media (max-width:900px){
+    .tiles{grid-template-columns:repeat(2,1fr)}
+    .rhead{display:none}
+    .row,.brow.row{grid-template-columns:1fr 1fr 1fr;gap:8px 10px}
+    .row .who{grid-column:1/-1;display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+    .row .spark{display:none}
+    .row .chev{display:none}
+    .lbl{display:block;font-size:9.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin-bottom:1px}
+    .brow.row .bonly{display:none}
+  }
+  @media (max-width:520px){
+    .top .upd{display:none}
+    .top img{height:38px}
+    .top .t{font-size:16px}
+    .top .t span{display:none}
+    .ibtn{padding:7px 10px;font-size:12.5px}
+    .tile .v{font-size:26px}
+    .kpis{grid-template-columns:repeat(2,1fr)}
+    .vtab{padding:10px 9px;font-size:14px}
+    .hr{grid-template-columns:92px 1fr 46px}
+  }
+</style>
+</head>
+<body>
+
+<header class="top"><div class="top-in">
+  <img src="../icons/icon-192.png" alt="Lean Comp Nutrition">
+  <div class="t">Coach Portal<span>Lean Comp Nutrition</span></div>
+  <div class="sp"></div>
+  <div class="upd" id="upd"></div>
+  <button class="ibtn" id="refresh" hidden>↻ Refresh</button>
+  <button class="ibtn" id="signout" hidden>Sign out</button>
+</div></header>
+
+<main class="wrap" id="main">
+  <section class="login" id="login">
+    <img src="../icons/icon-192.png" alt="">
+    <h1>Coach Portal</h1>
+    <p>Enter your coach PIN</p>
+    <div class="dots"><i class="dot"></i><i class="dot"></i><i class="dot"></i><i class="dot"></i></div>
+    <div class="pad" id="pad"></div>
+    <div class="lerr" id="lerr"></div>
+  </section>
+  <section id="app" hidden></section>
+</main>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true"></aside>
+
+<script>
+"use strict";
+/* Same Apps Script deployment as the app (app.leancompnutrition.com). */
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyyNOABBFi7Q3IzqUYQ_OkYimfKWOOnjqo5FQp_nLobGbn48p0sdw3kziuuoZsbh-ux/exec';
+const BODY_DUE_DAYS = 28;      // flag body comp as due after this many days
+
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function ymd(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+const TODAY=()=>ymd(new Date());
+function addDays(s,n){ const d=new Date(s+'T12:00:00'); d.setDate(d.getDate()+n); return ymd(d); }
+function daysAgo(s){ if(!s) return null; return Math.round((Date.parse(TODAY()+'T12:00:00')-Date.parse(s+'T12:00:00'))/864e5); }
+function nice(s){ if(!s) return '—'; const p=s.split('-'); return (+p[2])+' '+MON[+p[1]-1]+(p[0]!==String(new Date().getFullYear())?' '+p[0].slice(2):''); }
+function ago(n){ return n==null?'never':n===0?'today':n===1?'yesterday':n+' days ago'; }
+function num(v){ if(v===''||v==null) return null; const x=parseFloat(v); return isFinite(x)?x:null; }
+const r1=x=>Math.round(x*10)/10;
+function dateStr(v){
+  const s=String(v||'');
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  if(s.includes('T')){ const d=new Date(s); if(!isNaN(d)) return ymd(d); }
+  return s.slice(0,10);
+}
+
+/* ── scoring: identical to the app ── */
+function scoreWater(v){ const l=parseFloat(v||0); if(l<=0) return 0; if(l<1.5) return 4; if(l<2) return 8; if(l<2.5) return 12; return 15; }
+function scoreSleep(v){ const h=parseFloat(v||0); if(h<5) return 0; if(h<6) return 4; if(h<7) return 7; if(h<8) return 11; if(h<9) return 14; return 15; }
+function scoreSteps(v){ const s=parseInt(v||0); if(s<=0) return 0; if(s<4000) return 4; if(s<6000) return 8; if(s<8000) return 12; return 15; }
+function scoreFV(v){ const p=parseInt(v||0); if(p<=0) return 0; if(p<2) return 4; if(p<3) return 7; if(p<4) return 10; if(p<5) return 13; return 15; }
+const yes=v=>v==='Yes'||v===true||v==='true';
+function score(l){
+  let s=scoreWater(l['Water (L)'])+scoreSleep(l['Sleep (hrs)'])+scoreSteps(l['Steps'])+scoreFV(l['Fruit & Veg Portions']);
+  if(yes(l['Protein Target Hit'])) s+=15; if(yes(l['No Alcohol'])) s+=15;
+  if(yes(l['Exercise Completed'])||yes(l['exercise'])) s+=10;
+  return Math.min(s,100);
+}
+function scoreColour(s){ return s>=90?'#3d7a1a':s>=70?'#5a9e2f':s>=50?'#d39a00':'#cc2200'; }
+/* Some older rows are shifted one column (see the app). */
+function fixShift(l){
+  const sv=l['Sleep (hrs)'];
+  if(!(typeof sv==='string'&&(sv==='Yes'||sv==='No'))) return l;
+  return {...l,'Exercise Completed':sv,'Sleep (hrs)':l['Steps'],'Steps':l['Fruit & Veg Portions'],
+    'Fruit & Veg Portions':typeof l['Notes']==='number'?l['Notes']:l['Fruit & Veg Portions'],
+    'Notes':typeof l['Notes']==='number'?'':l['Notes']};
+}
+const GOALS={lose:'🔥 Lose fat',maintain:'⚖️ Maintain',gain:'💪 Build muscle',energy:'⚡ More energy'};
+const HABIT_NAMES={water:'Water',protein:'Protein',sleep:'Sleep',steps:'Steps',fv:'Fruit & veg',exercise:'Exercise',alcohol:'Alcohol'};
+const SRC={weight:'⚖️ Scales',scale:'📱 Smart scale',inbody:'📊 InBody'};
+
+/* ── state ── */
+let pin='', clients=[], allLogs=[], loadedAt=null;
+let view='clients', filter='all', sortBy='last', query='', feedFilter='week', feedLimit=60;
+let openKey=null, dMetric='weight';
+
+/* ── login ── */
+function drawDots(state){ document.querySelectorAll('.dot').forEach((d,i)=>{ d.className='dot'+(state==='bad'?' bad':(i<pin.length?' f':'')); }); }
+function buildPad(){
+  const keys=['1','2','3','4','5','6','7','8','9','C','0','⌫'];
+  $('pad').innerHTML=keys.map(k=>`<button type="button" class="key${k==='C'||k==='⌫'?' sm':''}" data-k="${k}">${k==='C'?'✕':k}</button>`).join('');
+  $('pad').addEventListener('click',e=>{ const b=e.target.closest('[data-k]'); if(b) press(b.dataset.k); });
+  document.addEventListener('keydown',e=>{
+    if(!$('login').hidden){ if(/^[0-9]$/.test(e.key)) press(e.key); else if(e.key==='Backspace') press('⌫'); }
+    else if(e.key==='Escape') closeClient();
+  });
+}
+let busy=false;
+function press(k){
+  if(busy) return;
+  $('lerr').textContent=''; $('lerr').className='lerr';
+  if(k==='C') pin=''; else if(k==='⌫') pin=pin.slice(0,-1); else if(pin.length<4) pin+=k;
+  drawDots();
+  if(pin.length===4) setTimeout(()=>tryLogin(pin),150);
+}
+async function tryLogin(p){
+  busy=true; $('lerr').className='lerr info'; $('lerr').textContent='Checking…';
+  const r=await fetchData(p);
+  busy=false;
+  if(r.ok){ try{ sessionStorage.setItem('lcn_coach_pin',p); }catch(e){} showApp(); return; }
+  try{ sessionStorage.removeItem('lcn_coach_pin'); }catch(e){}
+  pin=''; drawDots('bad'); setTimeout(()=>drawDots(),900);
+  $('lerr').className='lerr';
+  $('lerr').textContent=r.msg;
+}
+
+/* ── data ── */
+async function fetchData(p){
+  const ctl=new AbortController(); const t=setTimeout(()=>ctl.abort(),30000);
+  let data;
+  try{
+    const res=await fetch(SCRIPT_URL+'?action=coachData&pin='+encodeURIComponent(p),{signal:ctl.signal});
+    data=await res.json();
+  }catch(e){
+    clearTimeout(t);
+    return {ok:false,msg:e.name==='AbortError'?'The server took too long. Try again.':'Couldn’t reach the server. If this keeps happening, the portal backend (BodyComp.gs) may not be deployed yet.'};
+  }
+  clearTimeout(t);
+  if(data&&data.error==='unauthorised') return {ok:false,msg:'Wrong PIN. Try again.'};
+  if(data&&data.error==='locked') return {ok:false,msg:'Too many wrong tries. Wait 15 minutes and try again.'};
+  if(!data||data.ok!==true) return {ok:false,msg:'Unexpected reply from the server. Check BodyComp.gs is added and deployed as a new version.'};
+  pin=p; build(data); return {ok:true};
+}
+
+function build(data){
+  loadedAt=new Date();
+  const map={};
+  const keyOf=(email,name)=>{ email=String(email||'').toLowerCase().trim(); return email||('name:'+String(name||'').trim().toLowerCase()); };
+  const get=(email,name)=>{ const k=keyOf(email,name); if(!map[k]) map[k]={key:k,email:String(email||'').toLowerCase().trim(),name:String(name||'').trim(),logs:[],body:[],profile:null}; if(name&&!map[k].name) map[k].name=String(name).trim(); return map[k]; };
+
+  allLogs=(data.logs||[]).map(fixShift).map(l=>{ const d=dateStr(l['Date']); return {...l,Date:d,_score:score(l)}; }).filter(l=>/^\d{4}-\d{2}-\d{2}$/.test(l.Date));
+  allLogs.forEach(l=>{ const c=get(l['Client Email'],l['Client Name']); if(l['Client Name']) c.name=String(l['Client Name']).trim(); c.logs.push(l); l._key=c.key; });
+  (data.body||[]).forEach(b=>{ const c=get(b['Client Email'],b['Client Name']);
+    c.body.push({date:dateStr(b['Date']),weight:num(b['Weight (kg)']),muscle:num(b['Muscle (kg)']),bodyFat:num(b['Body Fat (%)']),fatMass:num(b['Fat Mass (kg)']),score:num(b['InBody Score']),source:String(b['Source']||'weight')}); });
+  (data.profiles||[]).forEach(p=>{ const c=get(p.email,p.name); c.profile=p.profile; });
+
+  const today=TODAY(), d7=addDays(today,-6), d14=addDays(today,-13), d30=addDays(today,-29);
+  clients=Object.values(map).map(c=>{
+    c.logs.sort((a,b)=>a.Date<b.Date?-1:a.Date>b.Date?1:0);
+    c.body.sort((a,b)=>a.date<b.date?-1:1);
+    if(!c.name) c.name=c.email?c.email.split('@')[0]:'Unknown';
+    const byDay={}; c.logs.forEach(l=>{ byDay[l.Date]=l._score; });   // last log of a day wins
+    c.byDay=byDay;
+    const days=Object.keys(byDay).sort();
+    c.last=days[days.length-1]||null; c.since=daysAgo(c.last); c.total=days.length;
+    const avg=(from,to)=>{ const v=days.filter(d=>d>=from&&d<=to).map(d=>byDay[d]); return v.length?Math.round(v.reduce((a,b)=>a+b,0)/v.length):null; };
+    c.avg7=avg(d7,today); c.avgPrev=avg(addDays(today,-13),addDays(today,-7)); c.avg30=avg(d30,today);
+    c.days7=days.filter(d=>d>=d7).length;
+    // streak (same rule as the app: today or yesterday counts as current)
+    let st=0; const desc=days.slice().reverse(); const now=Date.parse(today+'T12:00:00');
+    for(let i=0;i<desc.length;i++){ const diff=Math.round((now-Date.parse(desc[i]+'T12:00:00'))/864e5); if(diff===i||diff===i+1) st++; else break; }
+    c.streak=st;
+    c.dropping = c.avg7!=null && c.avgPrev!=null && c.avg7<=c.avgPrev-8;
+    const bw=c.body.filter(b=>b.weight!=null);
+    c.bLast=c.body[c.body.length-1]||null; c.bSince=c.bLast?daysAgo(c.bLast.date):null;
+    c.wChange=bw.length>1?r1(bw[bw.length-1].weight-bw[0].weight):null;
+    c.bodyDue=!c.bLast||c.bSince>=BODY_DUE_DAYS;
+    c.recent=c.since!=null&&c.since<=30;
+    c.nudge=c.recent&&c.since>=2;
+    c.goal=c.profile&&c.profile.goal||'';
+    c.spark=[]; for(let i=13;i>=0;i--){ const d=addDays(today,-i); c.spark.push(byDay[d]==null?null:byDay[d]); }
+    return c;
+  });
+}
+
+/* ── app shell ── */
+function showApp(){
+  $('login').hidden=true; $('app').hidden=false;
+  $('refresh').hidden=false; $('signout').hidden=false;
+  render();
+}
+function signOut(){
+  try{ sessionStorage.removeItem('lcn_coach_pin'); }catch(e){}
+  pin=''; clients=[]; allLogs=[]; closeClient();
+  $('app').hidden=true; $('app').innerHTML=''; $('login').hidden=false; $('refresh').hidden=true; $('signout').hidden=true; $('upd').textContent='';
+  drawDots();
+}
+async function refresh(){
+  const b=$('refresh'); b.disabled=true; b.textContent='↻ Loading…';
+  const r=await fetchData(pin);
+  b.disabled=false; b.textContent='↻ Refresh';
+  if(!r.ok){ alert(r.msg); if(/PIN/.test(r.msg)) signOut(); return; }
+  render(); if(openKey) openClient(openKey,true);
+}
+
+function render(){
+  const today=TODAY();
+  $('upd').textContent='Updated '+loadedAt.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  const recent=clients.filter(c=>c.recent);
+  const active7=clients.filter(c=>c.since!=null&&c.since<=6).length;
+  const wk=allLogs.filter(l=>l.Date>=addDays(today,-6));
+  const wkAvg=wk.length?Math.round(wk.reduce((a,l)=>a+l._score,0)/wk.length):null;
+  const todayN=new Set(allLogs.filter(l=>l.Date===today).map(l=>l._key)).size;
+  const nudgeN=clients.filter(c=>c.nudge).length;
+  const counts={all:clients.length,nudge:nudgeN,dropping:clients.filter(c=>c.dropping).length,
+    bodydue:clients.filter(c=>c.recent&&c.bodyDue).length,nosetup:clients.filter(c=>c.recent&&!c.profile).length};
+  const bodyN=clients.filter(c=>c.body.length).length;
+
+  let h=`<div class="tiles">
+    <div class="tile"><div class="k">Clients</div><div class="v">${active7}<small> / ${clients.length}</small></div><div class="s">logged in the last 7 days</div></div>
+    <div class="tile"><div class="k">Avg score · 7 days</div><div class="v" style="color:${wkAvg==null?'':scoreColour(wkAvg)}">${wkAvg==null?'—':wkAvg}</div><div class="s">${wk.length} logs this week</div></div>
+    <div class="tile"><div class="k">Logged today</div><div class="v">${todayN}</div><div class="s">${recent.length?Math.round(todayN/recent.length*100)+'% of recent clients':'&nbsp;'}</div></div>
+    <button type="button" class="tile${nudgeN?' warn':''}" data-goto="nudge"><div class="k">Need a nudge</div><div class="v">${nudgeN}</div><div class="s">no log for 2+ days</div></button>
+  </div>
+  <nav class="vtabs">
+    <button type="button" class="vtab${view==='clients'?' on':''}" data-view="clients">Clients</button>
+    <button type="button" class="vtab${view==='feed'?' on':''}" data-view="feed">Activity</button>
+    <button type="button" class="vtab${view==='body'?' on':''}" data-view="body">Body comp<span class="n">${bodyN}</span></button>
+  </nav>`;
+
+  if(view==='clients'){
+    const chips=[['all','All'],['nudge','Need a nudge'],['dropping','Score dropping'],['bodydue','Body comp due'],['nosetup','No setup yet']];
+    h+=`<div class="bar"><input class="search" id="q" type="search" placeholder="Search name or email" value="${esc(query)}">
+      <select class="sort" id="sort">
+        ${[['last','Last logged'],['name','Name'],['avg','7-day score'],['streak','Streak']].map(o=>`<option value="${o[0]}"${sortBy===o[0]?' selected':''}>Sort: ${o[1]}</option>`).join('')}
+      </select></div>
+      <div class="bar">${chips.map(c=>`<button type="button" class="chip${filter===c[0]?' on':''}" data-filter="${c[0]}">${c[1]} <span class="n">${counts[c[0]]}</span></button>`).join('')}</div>`;
+    let list=clients.slice();
+    if(filter==='nudge') list=list.filter(c=>c.nudge);
+    if(filter==='dropping') list=list.filter(c=>c.dropping);
+    if(filter==='bodydue') list=list.filter(c=>c.recent&&c.bodyDue);
+    if(filter==='nosetup') list=list.filter(c=>c.recent&&!c.profile);
+    const q=query.trim().toLowerCase(); if(q) list=list.filter(c=>c.name.toLowerCase().includes(q)||c.email.includes(q));
+    const cmp={last:(a,b)=>(b.last||'').localeCompare(a.last||''),name:(a,b)=>a.name.localeCompare(b.name),
+      avg:(a,b)=>(b.avg7??-1)-(a.avg7??-1),streak:(a,b)=>b.streak-a.streak};
+    list.sort(filter==='nudge'?(a,b)=>b.since-a.since:cmp[sortBy]);
+    h+=list.length?`<div class="rhead"><div>Client</div><div>Last log</div><div>Streak</div><div>7-day score</div><div>Last 14 days</div><div>Weight</div><div></div></div>
+      <div class="rows">${list.map(rowHtml).join('')}</div>`
+      :`<div class="empty">${filter==='nudge'?'Everyone active has logged in the last day. Nothing to chase. 👌':'No clients match.'}</div>`;
+  }
+
+  if(view==='feed'){
+    h+=`<div class="bar">${[['today','Today'],['week','Last 7 days'],['all','All']].map(f=>`<button type="button" class="chip${feedFilter===f[0]?' on':''}" data-feed="${f[0]}">${f[1]}</button>`).join('')}</div>`;
+    let logs=allLogs.slice();
+    if(feedFilter==='today') logs=logs.filter(l=>l.Date===today);
+    if(feedFilter==='week') logs=logs.filter(l=>l.Date>=addDays(today,-6));
+    logs.sort((a,b)=>b.Date.localeCompare(a.Date)||String(b['Timestamp']||'').localeCompare(String(a['Timestamp']||'')));
+    h+=logs.length?`<div class="rows">${logs.slice(0,feedLimit).map(l=>logHtml(l,true)).join('')}</div>`+
+      (logs.length>feedLimit?`<button type="button" class="more" id="feedmore">Show more (${logs.length-feedLimit} left)</button>`:'')
+      :'<div class="empty">No logs for this period.</div>';
+  }
+
+  if(view==='body'){
+    const list=clients.filter(c=>c.body.length).sort((a,b)=>(b.bLast.date).localeCompare(a.bLast.date));
+    h+=`<p style="font-size:13px;color:var(--muted);margin:-2px 0 12px">Clients who've logged weight or body composition in the app. Changes are since their first entry. Re-check is flagged after ${BODY_DUE_DAYS} days.</p>`;
+    h+=list.length?`<div class="rhead brow"><div>Client</div><div>Weight</div><div>Muscle</div><div>Body fat</div><div>Entries</div><div>Last measured</div><div></div></div>
+      <div class="rows">${list.map(bodyRowHtml).join('')}</div>`
+      :'<div class="empty">No body comp entries yet. Clients log them in the new ⚖️ Body tab in the app.</div>';
+  }
+
+  $('app').innerHTML=h;
+  wireApp();
+}
+
+function deltaSpan(d,goodDown,unit){
+  if(d==null) return '';
+  const cls=d===0||goodDown==null?'flat':((goodDown?d<0:d>0)?'up':'down');
+  return `<span class="${cls}">${d>0?'+':d<0?'−':'±'}${Math.abs(d)}${unit}</span>`;
+}
+function weightGoodDown(c){ return c.goal==='gain'?false:c.goal==='lose'?true:null; }
+
+function sparkSvg(vals){
+  const W=120,H=30,bw=W/vals.length;
+  return `<svg viewBox="0 0 ${W} ${H}" width="120" height="30" aria-hidden="true">${vals.map((v,i)=>v==null
+    ?`<rect x="${(i*bw+bw*.3).toFixed(1)}" y="${H-3}" width="${(bw*.4).toFixed(1)}" height="2" rx="1" fill="#dbe7cf"/>`
+    :`<rect x="${(i*bw+1).toFixed(1)}" y="${(H-Math.max(3,v/100*H)).toFixed(1)}" width="${(bw-2).toFixed(1)}" height="${Math.max(3,v/100*H).toFixed(1)}" rx="1.5" fill="${scoreColour(v)}"/>`).join('')}</svg>`;
+}
+
+function rowHtml(c){
+  const cls=c.since==null||c.since>=7?' gone':(c.since>=2?' quiet':'');
+  const tags=[];
+  if(c.goal) tags.push(`<span class="tag">${GOALS[c.goal]||esc(c.goal)}</span>`);
+  if(!c.profile) tags.push('<span class="tag grey">No setup</span>');
+  if(c.dropping) tags.push('<span class="tag amber">Score dropping</span>');
+  const avgD=c.avg7!=null&&c.avgPrev!=null?c.avg7-c.avgPrev:null;
+  const bw=c.body.filter(b=>b.weight!=null), lw=bw[bw.length-1];
+  return `<button type="button" class="row${cls}" data-client="${esc(c.key)}">
+    <div class="who"><div style="min-width:0"><div class="nm">${esc(c.name)}</div><div class="em">${esc(c.email||'(no email — older logs)')}</div></div><div>${tags.join(' ')}</div></div>
+    <div class="cell"><div class="lbl">Last log</div><div class="big" style="font-size:14px;color:${c.since>=2?'#a07800':'inherit'}">${ago(c.since)}</div><div class="sm">${c.total} days logged</div></div>
+    <div class="cell"><div class="lbl">Streak</div><div class="big">${c.streak}${c.streak?' 🔥':''}</div></div>
+    <div class="cell"><div class="lbl">7-day score</div><div class="big" style="color:${c.avg7==null?'var(--muted)':scoreColour(c.avg7)}">${c.avg7==null?'—':c.avg7}</div><div class="sm">${avgD==null?(c.days7?c.days7+' of 7 days':'&nbsp;'):deltaSpan(avgD,false,'')+' vs prev week'}</div></div>
+    <div class="cell spark">${sparkSvg(c.spark)}</div>
+    <div class="cell"><div class="lbl">Weight</div>${lw?`<div class="big" style="font-size:15px">${lw.weight} kg</div><div class="sm">${c.wChange==null?nice(lw.date):deltaSpan(c.wChange,weightGoodDown(c),' kg')+' since start'}</div>`:'<div class="sm">—</div>'}</div>
+    <div class="chev">›</div>
+  </button>`;
+}
+
+function bodyRowHtml(c){
+  const f=k=>c.body.filter(b=>b[k]!=null);
+  const cell=(k,unit,gd)=>{ const a=f(k); if(!a.length) return '<div class="sm">—</div>';
+    const L=a[a.length-1], d=a.length>1?r1(L[k]-a[0][k]):null;
+    return `<div class="big" style="font-size:15px">${L[k]}${unit}</div><div class="sm">${d==null?'&nbsp;':deltaSpan(d,gd,unit==='%'?' pts':unit)}</div>`; };
+  return `<button type="button" class="row brow${c.bSince>=BODY_DUE_DAYS?' quiet':''}" data-client="${esc(c.key)}">
+    <div class="who"><div style="min-width:0"><div class="nm">${esc(c.name)}</div><div class="em">${esc(c.email)}</div></div><div>${c.bSince>=BODY_DUE_DAYS?'<span class="tag amber">Re-check due</span>':''}</div></div>
+    <div class="cell"><div class="lbl">Weight</div>${cell('weight',' kg',weightGoodDown(c))}</div>
+    <div class="cell"><div class="lbl">Muscle</div>${cell('muscle',' kg',false)}</div>
+    <div class="cell"><div class="lbl">Body fat</div>${cell('bodyFat','%',true)}</div>
+    <div class="cell bonly"><div class="big" style="font-size:15px">${c.body.length}</div><div class="sm">${SRC[c.bLast.source]||''}</div></div>
+    <div class="cell bonly"><div class="big" style="font-size:14px">${nice(c.bLast.date)}</div><div class="sm">${ago(c.bSince)}</div></div>
+    <div class="chev">›</div>
+  </button>`;
+}
+
+function logHtml(l,showName){
+  const s=l._score, c=clients.find(x=>x.key===l._key);
+  const t=[];
+  if(num(l['Water (L)'])) t.push(`<span class="hab">💧 ${esc(l['Water (L)'])}L</span>`);
+  if(num(l['Sleep (hrs)'])) t.push(`<span class="hab">😴 ${esc(l['Sleep (hrs)'])}h</span>`);
+  if(num(l['Steps'])) t.push(`<span class="hab">👟 ${Number(l['Steps']).toLocaleString()}</span>`);
+  if(num(l['Fruit & Veg Portions'])) t.push(`<span class="hab">🥦 ${esc(l['Fruit & Veg Portions'])}</span>`);
+  const yn=(v,lab)=>`<span class="hab${yes(v)?'':' miss'}">${yes(v)?'✓':'✗'} ${lab}</span>`;
+  t.push(yn(l['Protein Target Hit'],'Protein'),yn(l['No Alcohol'],'No alcohol'),yn(yes(l['Exercise Completed'])||yes(l['exercise'])?'Yes':'No','Exercise'));
+  return `<div class="log" style="border-left-color:${scoreColour(s)}">
+    <div class="log-top"><div>${showName?`<div class="log-n"><button type="button" data-client="${esc(l._key)}">${esc(c?c.name:l['Client Name'])}</button></div>`:''}<div class="log-d">${nice(l.Date)} · ${ago(daysAgo(l.Date))}</div></div>
+    <div class="log-s" style="color:${scoreColour(s)}">${s}<span style="font-size:12px;color:var(--muted)">/100</span></div></div>
+    <div class="sbar"><i style="width:${s}%;background:${scoreColour(s)}"></i></div>
+    <div class="habs">${t.join('')}</div>
+    ${l['Notes']?`<div class="note">“${esc(l['Notes'])}”</div>`:''}
+  </div>`;
+}
+
+function wireApp(){
+  const a=$('app');
+  a.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{ view=b.dataset.view; render(); });
+  a.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{ filter=b.dataset.filter; render(); });
+  a.querySelectorAll('[data-feed]').forEach(b=>b.onclick=()=>{ feedFilter=b.dataset.feed; feedLimit=60; render(); });
+  a.querySelectorAll('[data-goto]').forEach(b=>b.onclick=()=>{ view='clients'; filter=b.dataset.goto; render(); });
+  a.querySelectorAll('[data-client]').forEach(b=>b.onclick=()=>openClient(b.dataset.client));
+  if($('feedmore')) $('feedmore').onclick=()=>{ feedLimit+=60; render(); };
+  if($('sort')) $('sort').onchange=e=>{ sortBy=e.target.value; render(); };
+  if($('q')){ const q=$('q'); q.oninput=()=>{ query=q.value; const pos=q.selectionStart; render(); const n=$('q'); n.focus(); try{ n.setSelectionRange(pos,pos); }catch(e){} }; }
+}
+
+/* ── client drawer ── */
+function lineChart(pts,key,colour,unit){
+  if(pts.length<2) return `<div class="chempty">${pts.length?'One entry so far.':'No entries.'}</div>`;
+  const W=520,H=180,pl=46,pr=14,pt=22,pb=26,iw=W-pl-pr,ih=H-pt-pb;
+  const t0=Date.parse(pts[0].date),span=Math.max(1,Date.parse(pts[pts.length-1].date)-t0);
+  const vals=pts.map(p=>p[key]); let lo=Math.min(...vals),hi=Math.max(...vals);
+  const pad=Math.max((hi-lo)*.15,unit==='%'?.8:.6); lo-=pad; hi+=pad;
+  const x=p=>pl+(Date.parse(p.date)-t0)/span*iw, y=v=>pt+ih-(v-lo)/(hi-lo)*ih;
+  let g=''; for(let i=0;i<=2;i++){ const gy=pt+i*ih/2; g+=`<line x1="${pl}" y1="${gy}" x2="${W-pr}" y2="${gy}" stroke="#e3eed8"/><text x="${pl-6}" y="${gy+3.5}" fill="#8a9a78" font-size="14" text-anchor="end">${r1(hi-i*(hi-lo)/2)}</text>`; }
+  const line=pts.map(p=>x(p).toFixed(1)+','+y(p[key]).toFixed(1)).join(' ');
+  const idx=pts.length<=3?pts.map((_,i)=>i):[0,Math.round((pts.length-1)/2),pts.length-1];
+  const L=pts[pts.length-1];
+  return `<svg class="ch" viewBox="0 0 ${W} ${H}">${g}
+    <polygon points="${pl},${pt+ih} ${line} ${x(L).toFixed(1)},${pt+ih}" fill="${colour}" opacity=".09"/>
+    <polyline points="${line}" fill="none" stroke="${colour}" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>
+    ${pts.map(p=>`<circle cx="${x(p).toFixed(1)}" cy="${y(p[key]).toFixed(1)}" r="3.5" fill="${colour}" stroke="#fff" stroke-width="1.5"/>`).join('')}
+    <text x="${Math.min(x(L),W-pr-2).toFixed(1)}" y="${(y(L[key])-9).toFixed(1)}" fill="${colour}" font-size="13" font-weight="800" text-anchor="end">${L[key]}</text>
+    ${idx.map(i=>`<text x="${x(pts[i]).toFixed(1)}" y="${H-6}" fill="#8a9a78" font-size="14" text-anchor="${i===0?'start':i===pts.length-1?'end':'middle'}">${nice(pts[i].date)}</text>`).join('')}
+  </svg>`;
+}
+function scoreBars(c){
+  const today=TODAY(), N=30, W=520, H=126, pb=22, bw=W/N;
+  let s='';
+  for(let i=N-1;i>=0;i--){ const d=addDays(today,-i), v=c.byDay[d], xi=(N-1-i)*bw;
+    if(v==null) s+=`<rect x="${(xi+bw*.3).toFixed(1)}" y="${H-pb-3}" width="${(bw*.4).toFixed(1)}" height="2.5" rx="1" fill="#dbe7cf"/>`;
+    else { const h=Math.max(4,v/100*(H-pb-14)); s+=`<rect x="${(xi+1.5).toFixed(1)}" y="${(H-pb-h).toFixed(1)}" width="${(bw-3).toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${scoreColour(v)}"><title>${nice(d)}: ${v}</title></rect>`; }
+  }
+  const lbl=[N-1,14,0].map(i=>{ const xi=(N-1-i)*bw+bw/2; return `<text x="${xi.toFixed(1)}" y="${H-4}" fill="#8a9a78" font-size="14" text-anchor="${i===N-1?'start':i===0?'end':'middle'}">${i===0?'Today':nice(addDays(today,-i))}</text>`; }).join('');
+  return `<svg class="ch" viewBox="0 0 ${W} ${H}">${s}${lbl}</svg>`;
+}
+
+function openClient(key,keepScroll){
+  const c=clients.find(x=>x.key===key); if(!c) return;
+  openKey=key;
+  const d=$('drawer'), today=TODAY(), from14=addDays(today,-13);
+  const p=c.profile||null;
+  const l14=c.logs.filter(l=>l.Date>=from14);
+  const pct=f=>l14.length?Math.round(l14.filter(f).length/l14.length*100):null;
+  const avgOf=k=>{ const v=l14.map(l=>num(l[k])).filter(x=>x!=null&&x>0); return v.length?r1(v.reduce((a,b)=>a+b,0)/v.length):null; };
+  const avgD=c.avg7!=null&&c.avgPrev!=null?c.avg7-c.avgPrev:null;
+
+  let h=`<div class="dh"><button type="button" class="back" id="dclose" aria-label="Close">←</button>
+    <div style="min-width:0"><div class="nm">${esc(c.name)}</div><div class="em">${c.email?`<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`:'no email on older logs'}</div></div></div><div class="db">`;
+
+  h+=`<div class="kpis">
+    <div class="kpi"><b>${c.streak}</b><span>Streak</span><i class="flat">last: ${ago(c.since)}</i></div>
+    <div class="kpi"><b style="color:${c.avg7==null?'':scoreColour(c.avg7)}">${c.avg7??'—'}</b><span>7-day avg</span><i>${avgD==null?'&nbsp;':deltaSpan(avgD,false,'')}</i></div>
+    <div class="kpi"><b>${c.avg30??'—'}</b><span>30-day avg</span><i class="flat">&nbsp;</i></div>
+    <div class="kpi"><b>${c.total}</b><span>Days logged</span><i class="flat">${c.days7}/7 this week</i></div>
+  </div>`;
+
+  h+=`<div class="sec"><h3>Daily score <small>last 30 days</small></h3>${c.logs.length?scoreBars(c):'<div class="chempty">No habit logs yet.</div>'}</div>`;
+
+  if(l14.length){
+    const bar=(lab,v)=>`<div class="hr"><div>${lab}</div><div class="tr"><i style="width:${v||0}%;background:${v>=70?'var(--green)':v>=40?'#d39a00':'#cc2200'}"></i></div><div class="pc">${v==null?'—':v+'%'}</div></div>`;
+    h+=`<div class="sec"><h3>Habits <small>${l14.length} logs in the last 14 days</small></h3>
+      ${bar('🥩 Protein hit',pct(l=>yes(l['Protein Target Hit'])))}
+      ${bar('🍷 No alcohol',pct(l=>yes(l['No Alcohol'])))}
+      ${bar('🏋️ Exercise',pct(l=>yes(l['Exercise Completed'])||yes(l['exercise'])))}
+      <dl class="kv" style="margin-top:10px">
+        <dt>💧 Water</dt><dd>${avgOf('Water (L)')??'—'} L avg</dd>
+        <dt>😴 Sleep</dt><dd>${avgOf('Sleep (hrs)')??'—'} h avg</dd>
+        <dt>👟 Steps</dt><dd>${avgOf('Steps')!=null?Math.round(avgOf('Steps')).toLocaleString():'—'} avg</dd>
+        <dt>🥦 Fruit &amp; veg</dt><dd>${avgOf('Fruit & Veg Portions')??'—'} portions avg</dd>
+      </dl></div>`;
+  }
+
+  // body comp
+  if(c.body.length){
+    const MS=[{k:'weight',l:'Weight',u:' kg',col:'#3d7a1a',gd:weightGoodDown(c)},{k:'muscle',l:'Muscle',u:' kg',col:'#2f86c4',gd:false},{k:'bodyFat',l:'Body fat',u:'%',col:'#d39a00',gd:true}]
+      .filter(m=>c.body.some(b=>b[m.k]!=null));
+    if(!MS.some(m=>m.k===dMetric)) dMetric='weight';
+    const M=MS.find(m=>m.k===dMetric);
+    h+=`<div class="sec"><h3>Body composition <small>${c.body.length} entries · last ${ago(c.bSince)}</small></h3>
+      <div class="bcm" style="grid-template-columns:repeat(${MS.length},1fr)">${MS.map(m=>{ const a=c.body.filter(b=>b[m.k]!=null), L=a[a.length-1], dd=a.length>1?r1(L[m.k]-a[0][m.k]):null;
+        return `<button type="button" data-dm="${m.k}" class="${m.k===dMetric?'on':''}"><div class="l">${m.l}</div><div class="v">${L[m.k]}<small style="font-size:11px;color:var(--muted)">${m.u}</small></div><div class="c">${dd==null?'&nbsp;':deltaSpan(dd,m.gd,m.u==='%'?' pts':m.u)}</div></button>`; }).join('')}</div>
+      ${lineChart(c.body.filter(b=>b[M.k]!=null),M.k,M.col,M.u.trim())}
+      <div style="font-size:11.5px;color:var(--muted);margin-top:6px">Latest from ${SRC[c.bLast.source]||'—'}${c.body.some(b=>b.source!==c.bLast.source)?' · mixed devices, so compare trends with care':''}</div></div>`;
+  }
+
+  // setup answers
+  if(p){
+    const t=p.targets, ab=p.about||{}, an=p.answers||{};
+    const r=p.ratings||{}; let lo=null; Object.keys(HABIT_NAMES).forEach(k=>{ if(r[k]!=null&&(lo==null||r[k]<r[lo])) lo=k; });
+    h+=`<div class="sec"><h3>Setup answers <small>${p.completedAt?'done '+nice(String(p.completedAt).slice(0,10)):'not finished'}</small></h3><dl class="kv">
+      ${p.goal?`<dt>Goal</dt><dd>${GOALS[p.goal]||esc(p.goal)}</dd>`:''}
+      ${t?`<dt>Targets</dt><dd>${esc(t.kcal)} kcal · ${esc(t.protein)}g protein · ${esc(t.carbs)}g carbs · ${esc(t.fat)}g fat</dd><dt>Maintenance</dt><dd>~${esc(t.tdee)} kcal</dd>`:''}
+      ${lo?`<dt>Weakest habit</dt><dd>${HABIT_NAMES[lo]} (rated ${r[lo]}/10)</dd>`:''}
+      ${an.skipsMeals?`<dt>Skips meals</dt><dd>${esc(an.skipsMeals)}</dd>`:''}
+      ${an.trackedBefore?`<dt>Tracked before</dt><dd>${esc(an.trackedBefore)}</dd>`:''}
+      ${an.weekendsOff?`<dt>Weekends off track</dt><dd>${esc(an.weekendsOff)}</dd>`:''}
+      ${ab.work?`<dt>Work</dt><dd>${esc(ab.work)}</dd>`:''}
+    </dl>${ab.challenge?`<div class="quote"><b>Biggest challenge:</b> “${esc(ab.challenge)}”</div>`:''}</div>`;
+  } else {
+    h+=`<div class="sec"><h3>Setup answers</h3><div style="font-size:13px;color:var(--muted)">Hasn’t done the app setup yet. It shows the next time they open the app.</div></div>`;
+  }
+
+  // recent logs
+  const recent=c.logs.slice().reverse().slice(0,10);
+  h+=`<div class="sec" style="background:none;border:none;box-shadow:none;padding:4px 0"><h3>Recent logs <small>${c.logs.length} total</small></h3>
+    <div class="rows">${recent.length?recent.map(l=>logHtml(l,false)).join(''):'<div class="empty">No habit logs yet.</div>'}</div></div>`;
+  h+='</div>';
+
+  const top=keepScroll?d.scrollTop:0;
+  d.innerHTML=h; d.scrollTop=top;
+  d.classList.add('on'); d.setAttribute('aria-hidden','false'); $('scrim').classList.add('on');
+  document.body.style.overflow='hidden';
+  $('dclose').onclick=closeClient;
+  d.querySelectorAll('[data-dm]').forEach(b=>b.onclick=()=>{ dMetric=b.dataset.dm; openClient(key,true); });
+}
+function closeClient(){
+  openKey=null; const d=$('drawer'); d.classList.remove('on'); d.setAttribute('aria-hidden','true');
+  $('scrim').classList.remove('on'); document.body.style.overflow='';
+}
+
+/* ── boot ── */
+buildPad();
+$('scrim').onclick=closeClient;
+$('signout').onclick=signOut;
+$('refresh').onclick=refresh;
+(function(){
+  let saved=''; try{ saved=sessionStorage.getItem('lcn_coach_pin')||''; }catch(e){}
+  if(saved){ pin=saved; drawDots(); tryLogin(saved); }
+})();
+</script>
+</body>
+</html>
