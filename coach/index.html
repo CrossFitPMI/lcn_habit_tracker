@@ -275,7 +275,7 @@ function press(k){
   if(pin.length===4) setTimeout(()=>tryLogin(pin),150);
 }
 async function tryLogin(p){
-  busy=true; $('lerr').className='lerr info'; $('lerr').textContent='Checking…';
+  busy=true; $('lerr').className='lerr info'; $('lerr').textContent='Checking PIN and loading clients…';
   const r=await fetchData(p);
   busy=false;
   if(r.ok){ try{ sessionStorage.setItem('lcn_coach_pin',p); }catch(e){} showApp(); return; }
@@ -287,7 +287,7 @@ async function tryLogin(p){
 
 /* ── data ── */
 async function fetchData(p){
-  const ctl=new AbortController(); const t=setTimeout(()=>ctl.abort(),30000);
+  const ctl=new AbortController(); const t=setTimeout(()=>ctl.abort(),45000);
   let data;
   try{
     const res=await fetch(SCRIPT_URL+'?action=coachData&pin='+encodeURIComponent(p),{signal:ctl.signal});
