@@ -354,9 +354,9 @@
     <div class="tabs">
       <button class="tab active" onclick="switchTab('log',this)">📋 Log Today</button>
       <button class="tab" onclick="switchTab('history',this)">📊 My History</button>
+      <button class="tab" onclick="switchTab('body',this)">⚖️ Body</button>
       <button class="tab" onclick="switchTab('streaks',this)">🏆 Streaks</button>
       <button class="tab" onclick="switchTab('aicoach',this)">🤖 AI Coach</button>
-      <button class="tab" onclick="switchTab('coach',this)">👁️ Coach View</button>
     </div>
 
     <div id="tab-log">
@@ -552,19 +552,11 @@
       </div>
     </div>
 
-    <div id="tab-coach" style="display:none">
-      <div class="section-label">Who's Slipping</div>
-      <div id="slip-panel"></div>
-      <div class="section-label" style="margin-top:22px">All Client Logs</div>
-      <div class="filter-row">
-        <button class="filter-btn active" onclick="setCoachFilter('all',this)">All</button>
-        <button class="filter-btn" onclick="setCoachFilter('today',this)">Today</button>
-        <button class="filter-btn" onclick="setCoachFilter('week',this)">This Week</button>
-      </div>
-      <div class="log-list" id="coach-log-list">
+    <!-- Coach View moved to its own page: app.leancompnutrition.com/coach/ -->
+    <div id="tab-body" style="display:none">
+      <div class="section-label">Body Composition</div>
+      <div id="bc-root">
         <div class="skeleton"><div class="skel-line" style="height:18px;width:40%"></div><div class="skel-line" style="height:13px;width:65%"></div></div>
-        <div class="skeleton"><div class="skel-line" style="height:18px;width:55%"></div><div class="skel-line" style="height:13px;width:45%"></div></div>
-        <div class="skeleton"><div class="skel-line" style="height:18px;width:35%"></div><div class="skel-line" style="height:13px;width:75%"></div></div>
       </div>
     </div>
 
@@ -793,13 +785,12 @@ function showApp() {
 
 // ── TABS ──
 function switchTab(tab,btn) {
-  if(tab==='coach' && !coachUnlocked) { showPinModal(); return; }
-  ['log','history','streaks','aicoach','coach'].forEach(t=>document.getElementById('tab-'+t).style.display='none');
+  ['log','history','body','streaks','aicoach'].forEach(t=>{ const el=document.getElementById('tab-'+t); if(el) el.style.display='none'; });
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
   document.getElementById('tab-'+tab).style.display='block';
   btn.classList.add('active');
   if(tab==='history') renderMyHistory();
-  if(tab==='coach')   renderCoachView();
+  if(tab==='body' && window.lcnBody) lcnBody.open();
   if(tab==='aicoach') openAICoachTab();
   if(tab==='streaks') renderStreaks();
 }
@@ -1270,7 +1261,7 @@ function formatDate(d){
    setCoachPin() in the Apps Script editor. */
 let pinEntry = '';
 let coachUnlocked = false;
-let coachPin = '5143';        // held in memory only for the session, never stored
+let coachPin = '';        // held in memory only for the session, never stored
 
 function showPinModal() {
   pinEntry = '';
@@ -1288,7 +1279,8 @@ function closePinModal() {
   document.getElementById('pin-error').textContent = '';
 }
 document.addEventListener('keydown', e => {
-  if(e.key === 'Escape' && document.getElementById('pin-overlay').style.display === 'flex') {
+  const ov=document.getElementById('pin-overlay');
+  if(e.key === 'Escape' && ov && ov.style.display === 'flex') {
     closePinModal();
   }
 });
@@ -2000,7 +1992,7 @@ ${currentUser}'s real data:
 - Habit hit-rates (last 7 logs): water ${a.rates.water}%, sleep ${a.rates.sleep}%, steps ${a.rates.steps}%, fruit/veg ${a.rates.fv}%, protein target ${a.rates.protein}%, no-alcohol ${a.rates.alcohol}%, exercise ${a.rates.exercise}%
 - Last 5 logged days:
 ${a.recentText || 'No logs yet.'}
-${a.trends.hasPrev?`- Week-on-week: avg score ${a.trends.thisWeek.avg} this week vs ${a.trends.lastWeek.avg} last week; protein ${a.trends.thisWeek.protein}% vs ${a.trends.lastWeek.protein}%; no-alcohol ${a.trends.thisWeek.alcohol}% vs ${a.trends.lastWeek.alcohol}%; exercise ${a.trends.thisWeek.exercise}% vs ${a.trends.lastWeek.exercise}%`:''}${typeof lcnProfilePrompt==='function'?lcnProfilePrompt():''}
+${a.trends.hasPrev?`- Week-on-week: avg score ${a.trends.thisWeek.avg} this week vs ${a.trends.lastWeek.avg} last week; protein ${a.trends.thisWeek.protein}% vs ${a.trends.lastWeek.protein}%; no-alcohol ${a.trends.thisWeek.alcohol}% vs ${a.trends.lastWeek.alcohol}%; exercise ${a.trends.thisWeek.exercise}% vs ${a.trends.lastWeek.exercise}%`:''}${typeof lcnProfilePrompt==='function'?lcnProfilePrompt():''}${typeof lcnBodyPrompt==='function'?lcnBodyPrompt():''}
 
 What they tell you in this conversation is real information about them. Use it, remember it within the session, and treat it as seriously as the logged numbers — especially when there are few logs. Never tell them you have no information about something they have just described to you.${lastSummaryRecap_()}`;
 
@@ -2215,35 +2207,6 @@ async function endAISession(){
 }
 </script>
 
-<div class="pin-overlay" id="pin-overlay" style="display:none" onclick="if(event.target===this)closePinModal()">
-  <div class="pin-modal">
-    <button class="pin-close" onclick="closePinModal()" aria-label="Close">✕</button>
-    <img data-lcn-logo src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" alt="Lean Comp Nutrition">
-    <h3>Coach Access</h3>
-    <p>Enter your 4-digit PIN to view all client data</p>
-    <div class="pin-dots">
-      <div class="pin-dot" id="pd0"></div>
-      <div class="pin-dot" id="pd1"></div>
-      <div class="pin-dot" id="pd2"></div>
-      <div class="pin-dot" id="pd3"></div>
-    </div>
-    <div class="pin-keypad">
-      <button class="pin-key" onclick="pinPress('1')">1</button>
-      <button class="pin-key" onclick="pinPress('2')">2</button>
-      <button class="pin-key" onclick="pinPress('3')">3</button>
-      <button class="pin-key" onclick="pinPress('4')">4</button>
-      <button class="pin-key" onclick="pinPress('5')">5</button>
-      <button class="pin-key" onclick="pinPress('6')">6</button>
-      <button class="pin-key" onclick="pinPress('7')">7</button>
-      <button class="pin-key" onclick="pinPress('8')">8</button>
-      <button class="pin-key" onclick="pinPress('9')">9</button>
-      <button class="pin-key del" onclick="pinClear()">✕</button>
-      <button class="pin-key" onclick="pinPress('0')">0</button>
-      <button class="pin-key del" onclick="pinBack()">⌫</button>
-    </div>
-    <div class="pin-error" id="pin-error"></div>
-  </div>
-</div>
   <!-- PWA install button: stays hidden until install is actually available -->
 <button id="installAppBtn" onclick="triggerInstall()" style="display:none;">
   ⬇ Install App
@@ -2997,6 +2960,371 @@ async function endAISession(){
 })();
 </script>
 <!-- ══════════════ END FIRST-RUN SETUP ══════════════ -->
+<!-- ══════════════ BODY COMPOSITION TAB (additive block) ══════════════
+     Weight, muscle and body fat over time. Saves to the "Body Comp" sheet via
+     BodyComp.gs (addBodyComp / deleteBodyComp / getMyBodyComp). -->
+<style>
+  .bc-intro{font-size:13px;color:var(--muted);line-height:1.55;margin:-4px 0 16px}
+  .bc-hero{background:var(--card);border:1px solid var(--border);border-top:3px solid var(--green);border-radius:16px;padding:18px 18px 14px;box-shadow:var(--shadow);margin-bottom:12px}
+  .bc-hero-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+  .bc-hero .k{font-size:11px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted)}
+  .bc-hero .big{font-family:"Nunito",sans-serif;font-size:40px;font-weight:900;color:var(--green-dark);line-height:1.05;margin-top:2px}
+  .bc-hero .big small{font-size:16px;font-weight:700;color:var(--muted);margin-left:3px}
+  .bc-hero .src{font-size:11.5px;font-weight:700;color:var(--green-dark);background:var(--green-light);border-radius:20px;padding:4px 10px;white-space:nowrap}
+  .bc-deltas{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px;font-size:13px;color:var(--muted)}
+  .bc-deltas b{font-weight:800}
+  .bc-good{color:var(--green-dark)} .bc-meh{color:#a07800} .bc-flat{color:var(--muted)}
+
+  .bc-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+  .bc-metrics.four{grid-template-columns:repeat(2,1fr)}
+  .bc-m{background:var(--card);border:2px solid var(--border);border-radius:14px;padding:10px 10px 9px;cursor:pointer;text-align:left;font-family:inherit;color:var(--text);transition:border-color .2s,background .2s}
+  .bc-m .lb{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.3px}
+  .bc-m .vl{font-family:"Nunito",sans-serif;font-size:20px;font-weight:900;margin-top:1px;color:var(--text)}
+  .bc-m .vl small{font-size:11px;font-weight:700;color:var(--muted)}
+  .bc-m .ch{font-size:11px;font-weight:700;margin-top:1px}
+  .bc-m.on{border-color:var(--green);background:var(--green-light)}
+  .bc-m.none{opacity:.55}
+
+  .bc-chart{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:12px 10px 8px;box-shadow:var(--shadow);margin-bottom:22px}
+  .bc-chart-top{display:flex;justify-content:space-between;align-items:center;padding:0 6px 6px;gap:8px}
+  .bc-chart-top .t{font-family:"Nunito",sans-serif;font-size:14px;font-weight:800;color:var(--green-dark)}
+  .bc-range{display:flex;gap:4px}
+  .bc-range button{background:none;border:1px solid var(--border);border-radius:14px;font-size:10.5px;font-weight:700;color:var(--muted);padding:3px 9px;cursor:pointer;font-family:inherit}
+  .bc-range button.on{background:var(--green);border-color:var(--green);color:#fff}
+  .bc-chart svg{display:block;width:100%;height:auto}
+  .bc-chart .empty{font-size:12.5px;color:var(--muted);text-align:center;padding:26px 10px}
+
+  .bc-form-title{font-family:"Nunito",sans-serif;font-size:17px;font-weight:800;color:var(--green-dark);margin-bottom:4px}
+  .bc-form-sub{font-size:12.5px;color:var(--muted);margin-bottom:14px;line-height:1.5}
+  .bc-src{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px}
+  .bc-src button{background:#f8fdf4;border:2px solid var(--border);border-radius:12px;padding:9px 4px;font-family:inherit;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;line-height:1.25}
+  .bc-src button .e{display:block;font-size:19px;margin-bottom:2px}
+  .bc-src button.on{border-color:var(--green);background:var(--green-light);color:var(--green-dark)}
+  .bc-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+  .bc-field label{display:block;font-size:12.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+  .bc-field label .u{text-transform:none;letter-spacing:0;font-weight:600}
+  .bc-field input{width:100%;background:#f8fdf4;border:3px solid var(--border);border-radius:14px;color:var(--text);font-family:"DM Sans",sans-serif;font-size:20px;font-weight:700;padding:13px 14px;outline:none;min-height:58px;-webkit-appearance:none}
+  .bc-field input:focus{border-color:var(--green)}
+  .bc-field input[type=date]{font-size:17px}
+  .bc-field.full{grid-column:1/-1}
+  .bc-field .hint{font-size:11.5px;color:var(--muted);margin-top:5px;line-height:1.4}
+  .bc-tip{background:var(--green-light);border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.5;color:var(--green-dark);margin:2px 0 12px}
+  .bc-err{font-size:13px;color:var(--red);font-weight:600;min-height:0;margin:-4px 0 8px}
+
+  .bc-hist{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+  .bc-row{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);border-left:4px solid var(--green);border-radius:12px;padding:10px 10px 10px 14px;box-shadow:var(--shadow)}
+  .bc-row .d{font-weight:800;font-size:14px;color:var(--text);white-space:nowrap}
+  .bc-row .s{font-size:11px;color:var(--muted);margin-top:1px}
+  .bc-row .v{margin-left:auto;display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end}
+  .bc-row .v span{font-size:11px;font-weight:700;background:var(--green-light);color:var(--green-dark);border-radius:20px;padding:3px 8px;white-space:nowrap}
+  .bc-row .x{flex:0 0 34px;height:34px;border-radius:50%;border:1px solid var(--border);background:#fff;color:var(--muted);font-size:14px;cursor:pointer}
+  .bc-row.pending{border-left-color:var(--orange)}
+  .bc-more{width:100%;background:none;border:1.5px solid var(--border);border-radius:10px;color:var(--green-dark);font-family:"Nunito",sans-serif;font-size:13.5px;font-weight:700;padding:10px;cursor:pointer}
+  @media(max-width:380px){.bc-metrics{grid-template-columns:repeat(2,1fr)}.bc-hero .big{font-size:34px}}
+</style>
+<script>
+(function(){
+  "use strict";
+  var el=function(id){return document.getElementById(id);};
+  var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});};
+
+  var SOURCES={
+    weight:{e:'⚖️',l:'Weight only',short:'Scales'},
+    scale:{e:'📱',l:'Smart scale',short:'Smart scale'},
+    inbody:{e:'📊',l:'InBody scan',short:'InBody'}
+  };
+  /* goodDown: which direction counts as progress. Weight depends on the
+     client's goal from their setup; fat always down, muscle always up. */
+  var METRICS=[
+    {k:'weight', l:'Weight',   u:'kg', colour:'#3d7a1a'},
+    {k:'muscle', l:'Muscle',   u:'kg', colour:'#2f86c4', goodDown:false},
+    {k:'bodyFat',l:'Body fat', u:'%',  colour:'#d39a00', goodDown:true},
+    {k:'fatMass',l:'Fat mass', u:'kg', colour:'#cc2200', goodDown:true},
+    {k:'score',  l:'InBody score',u:'',colour:'#6b5bd6', goodDown:false}
+  ];
+
+  var entries=[], loaded=false, loading=null, metric='weight', range='all', showAll=false;
+  var pendingAdds={}, pendingDeletes={};     // by date, while the sheet catches up
+  var PENDING_MS=15*60*1000;
+
+  function cacheKey(){ return 'lcn_body_'+currentEmail; }
+  function srcKey(){ return 'lcn_body_src_'+currentEmail; }
+  function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+  function lsSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+  function n(v){ if(v===''||v==null) return null; var x=parseFloat(v); return isFinite(x)?x:null; }
+  function r1(x){ return Math.round(x*10)/10; }
+  function todayStr(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+  function nice(d){ var p=String(d).split('-'); var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return p.length===3?(+p[2])+' '+M[+p[1]-1]+(p[0]!==String(new Date().getFullYear())?' '+p[0].slice(2):''):d; }
+  function daysBetween(a,b){ return Math.round((Date.parse(b)-Date.parse(a))/864e5); }
+  function goalKey(){ var p=window.lcnProfile&&lcnProfile(); return p&&p.goal||''; }
+  function weightGoodDown(){ var g=goalKey(); return g==='gain'?false:(g==='lose'?true:null); }
+  function goodDownFor(m){ return m.k==='weight'?weightGoodDown():m.goodDown; }
+
+  function fromRow(r){
+    return {id:String(r['ID']||''),date:String(r['Date']||'').slice(0,10),
+      weight:n(r['Weight (kg)']),muscle:n(r['Muscle (kg)']),bodyFat:n(r['Body Fat (%)']),
+      fatMass:n(r['Fat Mass (kg)']),score:n(r['InBody Score']),source:String(r['Source']||'weight')};
+  }
+  function sortEntries(){ entries.sort(function(a,b){ return a.date<b.date?-1:a.date>b.date?1:0; }); }
+  function saveCache(){ lsSet(cacheKey(),JSON.stringify({entries:entries,pendingAdds:pendingAdds,pendingDeletes:pendingDeletes})); }
+
+  /* Server list + anything saved in the last few minutes that the sheet
+     doesn't show yet (POSTs are fire-and-forget, so we can't wait for a reply). */
+  function merge(server){
+    var now=Date.now(), byDate={};
+    server.forEach(function(e){ byDate[e.date]=e; });
+    Object.keys(pendingDeletes).forEach(function(d){
+      if(now-pendingDeletes[d]>PENDING_MS || !byDate[d]) delete pendingDeletes[d]; else delete byDate[d]; });
+    Object.keys(pendingAdds).forEach(function(d){
+      var p=pendingAdds[d];
+      var s=byDate[d];
+      if(s && s.weight===p.weight){ delete pendingAdds[d]; return; }          // sheet has it now
+      if(now-p.savedAt>PENDING_MS){ delete pendingAdds[d]; return; }        // gave up waiting
+      byDate[d]=Object.assign({},p,{pending:true});
+    });
+    entries=Object.keys(byDate).map(function(d){ return byDate[d]; });
+    sortEntries();
+  }
+
+  function load(force){
+    if(!currentEmail) return Promise.resolve(entries);
+    if(!loaded){
+      try{ var c=JSON.parse(lsGet(cacheKey())||'null');
+        if(c&&Array.isArray(c.entries)){ entries=c.entries; pendingAdds=c.pendingAdds||{}; pendingDeletes=c.pendingDeletes||{}; } }catch(e){}
+    }
+    if(loading && !force) return loading;
+    loading=fetchT(SCRIPT_URL+'?action=getMyBodyComp&email='+encodeURIComponent(currentEmail),{},12000)
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if(!Array.isArray(data)) throw new Error('bad_response');
+        merge(data.map(fromRow)); loaded=true; saveCache();
+      })
+      .catch(function(){ loaded=true; })
+      .then(function(){ loading=null; if(isOpen()) render(); return entries; });
+    return loading;
+  }
+  function isOpen(){ var t=el('tab-body'); return t && t.style.display==='block'; }
+
+  // ── rendering ──
+  function latestWith(k){ for(var i=entries.length-1;i>=0;i--){ if(entries[i][k]!=null) return entries[i]; } return null; }
+  function firstWith(k){ for(var i=0;i<entries.length;i++){ if(entries[i][k]!=null) return entries[i]; } return null; }
+  function prevWith(k,before){ for(var i=entries.length-1;i>=0;i--){ if(entries[i][k]!=null && entries[i].date<before.date) return entries[i]; } return null; }
+  function deltaHtml(m,from,to,suffix){
+    if(!from||!to||from===to) return '';
+    var d=r1(to[m.k]-from[m.k]); var gd=goodDownFor(m);
+    var cls=d===0?'bc-flat':(gd==null?'bc-flat':((gd?d<0:d>0)?'bc-good':'bc-meh'));
+    return '<span class="'+cls+'"><b>'+(d>0?'+':d<0?'−':'±')+Math.abs(d)+(m.u==='%'?' pts':(m.u?' '+m.u:''))+'</b> '+suffix+'</span>';
+  }
+
+  function render(){
+    var root=el('bc-root'); if(!root) return;
+    if(!loaded && !entries.length){
+      root.innerHTML='<div class="skeleton"><div class="skel-line" style="height:18px;width:40%"></div><div class="skel-line" style="height:13px;width:65%"></div></div>';
+      return;
+    }
+    var h='';
+    if(!entries.length){
+      h+='<p class="bc-intro">Track your weight, muscle and body fat over time. Log a number from your scales, a smart scale or an InBody scan, and your trend builds here. Only you and your coach can see it.</p>';
+      h+=formHtml();
+      root.innerHTML=h; wireForm(); return;
+    }
+    var avail=METRICS.filter(function(m){ return latestWith(m.k); });
+    if(!avail.some(function(m){return m.k===metric;})) metric='weight';
+    var m=METRICS.filter(function(x){return x.k===metric;})[0];
+
+    // headline: latest weight
+    var lw=latestWith('weight'), fw=firstWith('weight'), pw=lw&&prevWith('weight',lw);
+    var W=METRICS[0];
+    h+='<div class="bc-hero"><div class="bc-hero-top"><div><div class="k">Latest · '+esc(nice(lw.date))+'</div>'+
+       '<div class="big">'+lw.weight+'<small>kg</small></div></div>'+
+       '<span class="src">'+SOURCES[lw.source||'weight'].e+' '+SOURCES[lw.source||'weight'].short+'</span></div>'+
+       '<div class="bc-deltas">'+deltaHtml(W,fw,lw,'since '+esc(nice(fw.date)))+deltaHtml(W,pw,lw,'since last time')+
+       (fw===lw?'<span>Your first entry. Log again in a week or two to see your trend.</span>':'')+'</div></div>';
+
+    // metric chooser
+    h+='<div class="bc-metrics'+(avail.length===4?' four':'')+'">'+avail.map(function(x){
+      var L=latestWith(x.k), F=firstWith(x.k);
+      var ch=deltaHtml(x,F,L,'');
+      return '<button type="button" class="bc-m'+(x.k===metric?' on':'')+'" data-m="'+x.k+'"><div class="lb">'+x.l+'</div>'+
+        '<div class="vl">'+L[x.k]+'<small>'+(x.u?(x.u==='%'?'%':' '+x.u):'')+'</small></div><div class="ch">'+(ch||'&nbsp;')+'</div></button>';
+    }).join('')+'</div>';
+
+    // chart
+    var pts=entries.filter(function(e){ return e[m.k]!=null; });
+    var spanDays=pts.length>1?daysBetween(pts[0].date,pts[pts.length-1].date):0;
+    if(range==='90' && spanDays<=100) range='all';
+    if(range==='90'){ var cut=new Date(Date.now()-90*864e5).toISOString().slice(0,10); pts=pts.filter(function(e){return e.date>=cut;}); }
+    h+='<div class="bc-chart"><div class="bc-chart-top"><div class="t">'+m.l+(m.u?' ('+m.u+')':'')+'</div>'+
+       (spanDays>100?'<div class="bc-range"><button type="button" data-r="90" class="'+(range==='90'?'on':'')+'">3 months</button><button type="button" data-r="all" class="'+(range==='all'?'on':'')+'">All</button></div>':'')+
+       '</div>'+chartSvg(pts,m)+'</div>';
+
+    h+=formHtml();
+
+    // history
+    var list=entries.slice().reverse(), shown=showAll?list:list.slice(0,6);
+    h+='<div class="section-label" style="margin-top:6px">History</div><div class="bc-hist">'+shown.map(function(e){
+      var v=[];
+      if(e.weight!=null) v.push(e.weight+' kg');
+      if(e.muscle!=null) v.push('💪 '+e.muscle+' kg');
+      if(e.bodyFat!=null) v.push(e.bodyFat+'% fat');
+      if(e.score!=null) v.push('Score '+e.score);
+      return '<div class="bc-row'+(e.pending?' pending':'')+'"><div><div class="d">'+esc(nice(e.date))+'</div>'+
+        '<div class="s">'+SOURCES[e.source||'weight'].e+' '+SOURCES[e.source||'weight'].short+(e.pending?' · saving…':'')+'</div></div>'+
+        '<div class="v">'+v.map(function(x){return '<span>'+esc(x)+'</span>';}).join('')+'</div>'+
+        '<button type="button" class="x" data-del="'+esc(e.date)+'" aria-label="Delete '+esc(nice(e.date))+'">✕</button></div>';
+    }).join('')+'</div>';
+    if(list.length>6) h+='<button type="button" class="bc-more" id="bc-more">'+(showAll?'Show fewer':'Show all '+list.length+' entries')+'</button>';
+
+    root.innerHTML=h;
+    root.querySelectorAll('.bc-m').forEach(function(b){ b.addEventListener('click',function(){ metric=b.dataset.m; render(); }); });
+    root.querySelectorAll('.bc-range button').forEach(function(b){ b.addEventListener('click',function(){ range=b.dataset.r; render(); }); });
+    root.querySelectorAll('[data-del]').forEach(function(b){ b.addEventListener('click',function(){ del(b.dataset.del); }); });
+    if(el('bc-more')) el('bc-more').addEventListener('click',function(){ showAll=!showAll; render(); });
+    wireForm();
+  }
+
+  function chartSvg(pts,m){
+    if(pts.length<2) return '<div class="empty">'+(pts.length?'One entry so far. Your line appears after the next one.':'No '+m.l.toLowerCase()+' entries in this range.')+'</div>';
+    var W=340,H=180,pl=36,pr=14,pt=22,pb=26,iw=W-pl-pr,ih=H-pt-pb;
+    var t0=Date.parse(pts[0].date), t1=Date.parse(pts[pts.length-1].date), span=Math.max(1,t1-t0);
+    var vals=pts.map(function(p){return p[m.k];}), lo=Math.min.apply(null,vals), hi=Math.max.apply(null,vals);
+    var pad=Math.max((hi-lo)*0.15, m.u==='%'?0.8:(m.k==='score'?2:0.6)); lo-=pad; hi+=pad;
+    var x=function(p){ return pl+((Date.parse(p.date)-t0)/span)*iw; };
+    var y=function(v){ return pt+ih-((v-lo)/(hi-lo))*ih; };
+    var g='';
+    for(var i=0;i<=2;i++){ var gy=pt+i*ih/2, gv=hi-i*(hi-lo)/2;
+      g+='<line x1="'+pl+'" y1="'+gy+'" x2="'+(W-pr)+'" y2="'+gy+'" stroke="#e3eed8" stroke-width="1"/>'+
+         '<text x="'+(pl-6)+'" y="'+(gy+3.5)+'" fill="#8a9a78" font-size="10" text-anchor="end">'+r1(gv)+'</text>'; }
+    var line=pts.map(function(p){ return x(p).toFixed(1)+','+y(p[m.k]).toFixed(1); }).join(' ');
+    var area=pl+','+(pt+ih)+' '+line+' '+x(pts[pts.length-1]).toFixed(1)+','+(pt+ih);
+    var idx=pts.length<=3?pts.map(function(_,i){return i;}):[0,Math.round((pts.length-1)/2),pts.length-1];
+    var xl=idx.map(function(i){ var a=i===0?'start':(i===pts.length-1?'end':'middle');
+      return '<text x="'+x(pts[i]).toFixed(1)+'" y="'+(H-7)+'" fill="#8a9a78" font-size="10" text-anchor="'+a+'">'+esc(nice(pts[i].date))+'</text>'; }).join('');
+    var dots=pts.map(function(p){ return '<circle cx="'+x(p).toFixed(1)+'" cy="'+y(p[m.k]).toFixed(1)+'" r="'+(pts.length>30?2.2:3.6)+'" fill="'+m.colour+'" stroke="#fff" stroke-width="1.5"/>'; }).join('');
+    var L=pts[pts.length-1];
+    var lbl='<text x="'+Math.min(x(L),W-pr-2).toFixed(1)+'" y="'+(y(L[m.k])-9).toFixed(1)+'" fill="'+m.colour+'" font-size="12" font-weight="800" text-anchor="end">'+L[m.k]+'</text>';
+    return '<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(m.l)+' over time">'+g+
+      '<polygon points="'+area+'" fill="'+m.colour+'" opacity=".09"/>'+
+      '<polyline points="'+line+'" fill="none" stroke="'+m.colour+'" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>'+dots+lbl+xl+'</svg>';
+  }
+
+  // ── the form ──
+  function curSource(){ var s=lsGet(srcKey()); if(SOURCES[s]) return s; var l=entries.length?entries[entries.length-1].source:''; return SOURCES[l]?l:'weight'; }
+  function formHtml(){
+    var s=curSource(), last=entries.length?entries[entries.length-1]:null;
+    var ph=function(k,fallback){ return last&&last[k]!=null?'Last: '+last[k]:fallback; };
+    var f='<div class="log-card" id="bc-form"><div class="bc-form-title">Log a measurement</div>'+
+      '<div class="bc-form-sub">What did you measure with?</div>'+
+      '<div class="bc-src">'+Object.keys(SOURCES).map(function(k){
+        return '<button type="button" data-src="'+k+'" class="'+(k===s?'on':'')+'"><span class="e">'+SOURCES[k].e+'</span>'+SOURCES[k].l+'</button>'; }).join('')+'</div>'+
+      '<div class="bc-grid">'+
+        '<div class="bc-field"><label for="bc-date">Date</label><input type="date" id="bc-date" value="'+todayStr()+'" max="'+todayStr()+'"></div>'+
+        '<div class="bc-field"><label for="bc-weight">Weight <span class="u">(kg)</span></label><input type="number" id="bc-weight" inputmode="decimal" step="0.1" min="25" max="350" placeholder="'+ph('weight','e.g. 72.4')+'"></div>';
+    if(s!=='weight'){
+      f+='<div class="bc-field"><label for="bc-muscle">'+(s==='inbody'?'Skeletal muscle':'Muscle mass')+' <span class="u">(kg)</span></label><input type="number" id="bc-muscle" inputmode="decimal" step="0.1" min="5" max="120" placeholder="'+ph('muscle','e.g. 31.6')+'"></div>'+
+         '<div class="bc-field"><label for="bc-bodyfat">Body fat <span class="u">(%)</span></label><input type="number" id="bc-bodyfat" inputmode="decimal" step="0.1" min="2" max="75" placeholder="'+ph('bodyFat','e.g. 24.5')+'"></div>';
+    }
+    if(s==='inbody'){
+      f+='<div class="bc-field"><label for="bc-fatmass">Body fat mass <span class="u">(kg)</span></label><input type="number" id="bc-fatmass" inputmode="decimal" step="0.1" min="1" max="250" placeholder="'+ph('fatMass','e.g. 17.8')+'"></div>'+
+         '<div class="bc-field"><label for="bc-score">InBody score</label><input type="number" id="bc-score" inputmode="numeric" step="1" min="0" max="120" placeholder="'+ph('score','e.g. 78')+'"></div>';
+    }
+    f+='</div>';
+    f+='<div class="bc-tip">'+(s==='inbody'
+        ? 'Copy the numbers straight off your printout. Try to scan at the same time of day each time, ideally before eating or training.'
+        : s==='scale'
+        ? 'Stick to the same scale each time. Different devices measure muscle and fat differently, so mixing them makes your trend jump around.'
+        : 'Weigh first thing in the morning, after the toilet and before food. Day-to-day swings are normal, so watch the trend, not one number.')+'</div>';
+    f+='<div class="bc-err" id="bc-err"></div><button class="submit-btn" id="bc-save" type="button">✓ Save measurement</button>'+
+       '<div class="status-msg" id="bc-status"></div></div>';
+    return f;
+  }
+  function wireForm(){
+    var form=el('bc-form'); if(!form) return;
+    form.querySelectorAll('[data-src]').forEach(function(b){ b.addEventListener('click',function(){
+      var keep={date:el('bc-date').value,weight:el('bc-weight').value};
+      lsSet(srcKey(),b.dataset.src);
+      var tmp=document.createElement('div'); tmp.innerHTML=formHtml(); form.replaceWith(tmp.firstChild); wireForm();
+      el('bc-date').value=keep.date; el('bc-weight').value=keep.weight;
+    }); });
+    el('bc-save').addEventListener('click',save);
+  }
+
+  var saving=false;
+  function val(id){ var i=el(id); return i&&i.value!==''?parseFloat(i.value):null; }
+  function save(){
+    if(saving) return;
+    var err=el('bc-err'); err.textContent='';
+    var s=curSource(), date=el('bc-date').value;
+    var e={date:date,source:s,weight:val('bc-weight'),muscle:val('bc-muscle'),bodyFat:val('bc-bodyfat'),fatMass:val('bc-fatmass'),score:val('bc-score')};
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){ err.textContent='Please pick a date.'; return; }
+    if(date>todayStr()){ err.textContent='That date is in the future.'; return; }
+    if(e.weight==null){ err.textContent='Please enter your weight.'; el('bc-weight').focus(); return; }
+    if(e.weight<25||e.weight>350){ err.textContent='That weight doesn’t look right. It should be in kg.'; return; }
+    if(e.muscle!=null&&(e.muscle<5||e.muscle>=e.weight)){ err.textContent='Muscle mass should be in kg and less than your weight.'; return; }
+    if(e.bodyFat!=null&&(e.bodyFat<2||e.bodyFat>75)){ err.textContent='Body fat should be a percentage, between 2 and 75.'; return; }
+    if(e.fatMass!=null&&(e.fatMass<1||e.fatMass>=e.weight)){ err.textContent='Body fat mass should be in kg and less than your weight.'; return; }
+    if(e.score!=null&&(e.score<0||e.score>120)){ err.textContent='InBody score is usually between 0 and 100.'; return; }
+    ['weight','muscle','bodyFat','fatMass','score'].forEach(function(k){ if(e[k]!=null) e[k]=k==='score'?Math.round(e[k]):r1(e[k]); });
+    var replacing=entries.some(function(x){return x.date===date;});
+    if(replacing && !confirm('You already have an entry for '+nice(date)+'. Replace it?')) return;
+
+    saving=true;
+    var btn=el('bc-save'); btn.disabled=true; btn.classList.add('saving'); btn.textContent='Saving…';
+    e.id=Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+    e.savedAt=Date.now();
+    fetch(SCRIPT_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'addBodyComp',email:currentEmail,name:currentUser,id:e.id,date:e.date,
+        weight:e.weight,muscle:e.muscle,bodyFat:e.bodyFat,fatMass:e.fatMass,score:e.score,source:e.source})})
+    .then(function(){
+      delete pendingDeletes[date];
+      pendingAdds[date]=e;
+      entries=entries.filter(function(x){return x.date!==date;}).concat([Object.assign({},e,{pending:true})]);
+      sortEntries(); saveCache(); metric='weight';
+      render();
+      var st=el('bc-status'); if(st){ st.textContent='Saved. 💪'; st.className='status-msg success'; setTimeout(function(){ if(st) st.className='status-msg'; },3500); }
+      setTimeout(function(){ load(true); },2500);
+    })
+    .catch(function(){
+      var b=el('bc-save'); if(b){ b.disabled=false; b.classList.remove('saving'); b.textContent='✓ Save measurement'; }
+      var st=el('bc-status'); if(st){ st.textContent='Couldn’t save. Check your connection and try again.'; st.className='status-msg error'; }
+    })
+    .then(function(){ saving=false; });
+  }
+
+  function del(date){
+    if(!confirm('Delete your entry for '+nice(date)+'?')) return;
+    var gone=entries.filter(function(x){return x.date===date;})[0];
+    entries=entries.filter(function(x){return x.date!==date;});
+    delete pendingAdds[date];
+    pendingDeletes[date]=Date.now();
+    saveCache(); render();
+    fetch(SCRIPT_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'deleteBodyComp',email:currentEmail,date:date,id:gone&&gone.id||''})})
+      .then(function(){ setTimeout(function(){ load(true); },2500); })
+      .catch(function(){ if(gone){ entries.push(gone); sortEntries(); delete pendingDeletes[date]; saveCache(); render(); }
+        alert('Couldn’t delete. Check your connection and try again.'); });
+  }
+
+  // ── AI coach: a short line about their body comp trend ──
+  window.lcnBodyPrompt=function(){
+    if(!entries.length) return '';
+    var L=entries[entries.length-1], F=entries[0], lines=[];
+    var fmt=function(e){ var b=[]; if(e.weight!=null) b.push(e.weight+' kg'); if(e.muscle!=null) b.push('muscle '+e.muscle+' kg'); if(e.bodyFat!=null) b.push('body fat '+e.bodyFat+'%'); return b.join(', '); };
+    lines.push('- Latest ('+L.date+', '+SOURCES[L.source||'weight'].l.toLowerCase()+'): '+fmt(L));
+    if(F!==L) lines.push('- First entry ('+F.date+'): '+fmt(F)+' ('+entries.length+' entries in total)');
+    return '\n\nBody composition they have logged in the app:\n'+lines.join('\n')+
+      '\nMention this only when it is relevant to what they bring up. Focus on the trend over weeks, never a single reading, and never comment on their body or appearance.';
+  };
+
+  window.lcnBody={ open:function(){ render(); load(); }, load:load };
+
+  /* Load quietly after login so the AI coach has it too. */
+  var _show=showApp;
+  showApp=function(){ _show.apply(this,arguments); entries=[]; loaded=false; pendingAdds={}; pendingDeletes={}; setTimeout(function(){ load(); },800); };
+  if(currentEmail && el('app-section') && el('app-section').style.display==='block') setTimeout(function(){ load(); },800);
+})();
+</script>
+<!-- ══════════════ END BODY COMPOSITION TAB ══════════════ -->
 
 </body>
 </html>
