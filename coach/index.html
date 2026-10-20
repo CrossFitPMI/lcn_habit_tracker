@@ -149,6 +149,25 @@
   svg.ch{display:block;width:100%;height:auto}
   .chempty{font-size:12.5px;color:var(--muted);text-align:center;padding:18px}
 
+  /* ── check-ins ── */
+  .ci{background:var(--card);border:1px solid var(--border);border-left:4px solid var(--green);border-radius:14px;padding:12px 14px;box-shadow:var(--shadow)}
+  .ci.flag{border-left-color:var(--amber)}
+  .ci-top{display:flex;align-items:flex-start;gap:10px}
+  .ci-top .emo{font-size:28px;line-height:1}
+  .ci-top .nm button{background:none;border:none;font:inherit;color:var(--green-dark);padding:0;text-align:left}
+  .ci-top .nm button:hover{text-decoration:underline}
+  .ci-r{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0 2px}
+  .ci-r span{font-size:11.5px;font-weight:700;border-radius:20px;padding:3px 9px;background:var(--green-light);color:var(--green-dark)}
+  .ci-r span.bad{background:var(--amber-light);color:#8a5d00}
+  .ci-q{font-size:13.5px;line-height:1.5;margin-top:7px}
+  .ci-q b{font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);display:block}
+  .ci-ai{margin-top:9px;background:#f6fbf1;border-radius:10px;padding:8px 11px;font-size:13px;line-height:1.5}
+  .ci-ai b{color:var(--green-dark)}
+  .pending{display:flex;flex-wrap:wrap;gap:6px}
+  .pending button{background:var(--white);border:1.5px solid var(--border);border-radius:20px;padding:6px 12px;font-size:13px;font-weight:700;color:var(--text)}
+  .pending button:hover{border-color:var(--green)}
+  .sub{font-family:"Nunito",sans-serif;font-size:13px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--green-dark);margin:18px 0 8px}
+
   /* ── body comp table ── */
   .brow{display:grid;grid-template-columns:minmax(160px,2fr) 1fr 1fr 1fr 1fr 1.1fr 20px;gap:12px;align-items:center}
 
@@ -253,7 +272,7 @@ const SRC={weight:'⚖️ Scales',scale:'📱 Smart scale',inbody:'📊 InBody'}
 /* ── state ── */
 let pin='', clients=[], allLogs=[], loadedAt=null;
 let view='clients', filter='all', sortBy='last', query='', feedFilter='week', feedLimit=60;
-let openKey=null, dMetric='weight';
+let openKey=null, dMetric='weight', ciWeek=null;
 
 /* ── login ── */
 function drawDots(state){ document.querySelectorAll('.dot').forEach((d,i)=>{ d.className='dot'+(state==='bad'?' bad':(i<pin.length?' f':'')); }); }
@@ -314,11 +333,13 @@ function build(data){
   (data.body||[]).forEach(b=>{ const c=get(b['Client Email'],b['Client Name']);
     c.body.push({date:dateStr(b['Date']),weight:num(b['Weight (kg)']),muscle:num(b['Muscle (kg)']),bodyFat:num(b['Body Fat (%)']),fatMass:num(b['Fat Mass (kg)']),score:num(b['InBody Score']),source:String(b['Source']||'weight')}); });
   (data.profiles||[]).forEach(p=>{ const c=get(p.email,p.name); c.profile=p.profile; });
+  (data.checkins||[]).forEach(ci=>{ const c=get(ci.email,ci.name); (c.checkins=c.checkins||[]).push(ci); });
 
   const today=TODAY(), d7=addDays(today,-6), d14=addDays(today,-13), d30=addDays(today,-29);
   clients=Object.values(map).map(c=>{
     c.logs.sort((a,b)=>a.Date<b.Date?-1:a.Date>b.Date?1:0);
     c.body.sort((a,b)=>a.date<b.date?-1:1);
+    c.checkins=(c.checkins||[]).sort((a,b)=>a.week<b.week?-1:1);
     if(!c.name) c.name=c.email?c.email.split('@')[0]:'Unknown';
     const byDay={}; c.logs.forEach(l=>{ byDay[l.Date]=l._score; });   // last log of a day wins
     c.byDay=byDay;
@@ -385,6 +406,7 @@ function render(){
   </div>
   <nav class="vtabs">
     <button type="button" class="vtab${view==='clients'?' on':''}" data-view="clients">Clients</button>
+    <button type="button" class="vtab${view==='checkins'?' on':''}" data-view="checkins">Check-ins<span class="n">${clients.filter(c=>c.checkins.some(x=>x.week===lastSunday())).length}</span></button>
     <button type="button" class="vtab${view==='feed'?' on':''}" data-view="feed">Activity</button>
     <button type="button" class="vtab${view==='body'?' on':''}" data-view="body">Body comp<span class="n">${bodyN}</span></button>
   </nav>`;
@@ -408,6 +430,20 @@ function render(){
     h+=list.length?`<div class="rhead"><div>Client</div><div>Last log</div><div>Streak</div><div>7-day score</div><div>Last 14 days</div><div>Weight</div><div></div></div>
       <div class="rows">${list.map(rowHtml).join('')}</div>`
       :`<div class="empty">${filter==='nudge'?'Everyone active has logged in the last day. Nothing to chase. 👌':'No clients match.'}</div>`;
+  }
+
+  if(view==='checkins'){
+    const weeks=[]; for(let i=0;i<4;i++) weeks.push(addDays(lastSunday(),-7*i));
+    if(!ciWeek) ciWeek=weeks[0];
+    h+=`<div class="bar">${weeks.map((w,i)=>`<button type="button" class="chip${ciWeek===w?' on':''}" data-ciw="${w}">${i===0?'This week':i===1?'Last week':nice(addDays(w,-6))+' – '+nice(w)}</button>`).join('')}</div>`;
+    const done=clients.filter(c=>c.checkins.some(x=>x.week===ciWeek)).map(c=>({c,ci:c.checkins.find(x=>x.week===ciWeek)}));
+    done.forEach(d=>{ d.flags=ciFlags(d.ci); });
+    done.sort((a,b)=>b.flags.length-a.flags.length||String(b.ci.submittedAt).localeCompare(String(a.ci.submittedAt)));
+    const active=clients.filter(c=>c.since!=null&&daysAgo(c.last)<=14+daysAgo(ciWeek));
+    const notYet=active.filter(c=>!c.checkins.some(x=>x.week===ciWeek)).sort((a,b)=>a.name.localeCompare(b.name));
+    h+=`<p style="font-size:13px;color:var(--muted);margin:-2px 0 12px"><b style="color:var(--green-dark)">${done.length}</b> checked in for the week ${nice(addDays(ciWeek,-6))} – ${nice(ciWeek)}. Anyone with low energy or sleep, high hunger or stress, or a rough week is shown first.</p>`;
+    h+=done.length?`<div class="rows">${done.map(d=>checkinHtml(d.c,d.ci,true)).join('')}</div>`:'<div class="empty">No check-ins for this week yet. They open on Sunday in the app.</div>';
+    if(notYet.length) h+=`<div class="sub">Not checked in yet · ${notYet.length}</div><div class="pending">${notYet.map(c=>`<button type="button" data-client="${esc(c.key)}">${esc(c.name)}</button>`).join('')}</div>`;
   }
 
   if(view==='feed'){
@@ -482,6 +518,33 @@ function bodyRowHtml(c){
   </button>`;
 }
 
+function lastSunday(){ const d=new Date(); d.setHours(12,0,0,0); d.setDate(d.getDate()-d.getDay()); return ymd(d); }
+const EMO=['😣','🙁','😐','🙂','😄'];
+const FR={nailed:'Nailed it',partly:'Partly',notreally:'Not really'};
+function ciFlags(ci){
+  const f=[]; const n=k=>Number(ci[k]);
+  if(n('overall')&&n('overall')<=2) f.push('overall');
+  if(n('energy')&&n('energy')<=2) f.push('energy');
+  if(n('sleep')&&n('sleep')<=2) f.push('sleep');
+  if(n('hunger')>=4) f.push('hunger');
+  if(n('stress')>=4) f.push('stress');
+  return f;
+}
+function checkinHtml(c,ci,showName){
+  const fl=ciFlags(ci), r=ci.review||{};
+  const chip=(k,lab)=>`<span class="${fl.includes(k)?'bad':''}">${lab} ${esc(ci[k])}/5</span>`;
+  return `<div class="ci${fl.length?' flag':''}">
+    <div class="ci-top"><div class="emo">${EMO[(Number(ci.overall)||3)-1]}</div><div style="min-width:0;flex:1">
+      ${showName?`<div class="nm" style="font-weight:800;font-size:15px"><button type="button" data-client="${esc(c.key)}">${esc(c.name)}</button></div>`:`<div style="font-weight:800">Week ${nice(addDays(ci.week,-6))} – ${nice(ci.week)}</div>`}
+      <div class="log-d">${ci.submittedAt?'Checked in '+ago(daysAgo(dateStr(ci.submittedAt))):''}${ci.weight!==''&&ci.weight!=null?' · weighed '+esc(ci.weight)+' kg':''}${ci.tier==='pro'?' · Pro':''}</div></div></div>
+    <div class="ci-r">${chip('energy','Energy')}${chip('sleep','Sleep')}${chip('hunger','Hunger')}${chip('stress','Stress')}${ci.focusResult?`<span class="${ci.focusResult==='notreally'?'bad':''}">Last focus: ${FR[ci.focusResult]||esc(ci.focusResult)}</span>`:''}</div>
+    ${ci.lastFocus?`<div class="ci-q"><b>Last week’s focus</b>${esc(ci.lastFocus)}</div>`:''}
+    ${ci.win?`<div class="ci-q"><b>Biggest win</b>“${esc(ci.win)}”</div>`:''}
+    ${ci.struggle?`<div class="ci-q"><b>What got in the way</b>“${esc(ci.struggle)}”</div>`:''}
+    ${r.headline||r.focus?`<div class="ci-ai">${r.headline?`<div>🤖 ${esc(r.headline)}</div>`:''}${r.focus?`<div><b>New focus:</b> ${esc(r.focus)}</div>`:''}</div>`:'<div class="ci-ai" style="color:var(--muted)">No AI review saved yet.</div>'}
+  </div>`;
+}
+
 function logHtml(l,showName){
   const s=l._score, c=clients.find(x=>x.key===l._key);
   const t=[];
@@ -505,6 +568,7 @@ function wireApp(){
   a.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{ view=b.dataset.view; render(); });
   a.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{ filter=b.dataset.filter; render(); });
   a.querySelectorAll('[data-feed]').forEach(b=>b.onclick=()=>{ feedFilter=b.dataset.feed; feedLimit=60; render(); });
+  a.querySelectorAll('[data-ciw]').forEach(b=>b.onclick=()=>{ ciWeek=b.dataset.ciw; render(); });
   a.querySelectorAll('[data-goto]').forEach(b=>b.onclick=()=>{ view='clients'; filter=b.dataset.goto; render(); });
   a.querySelectorAll('[data-client]').forEach(b=>b.onclick=()=>openClient(b.dataset.client));
   if($('feedmore')) $('feedmore').onclick=()=>{ feedLimit+=60; render(); };
@@ -590,6 +654,12 @@ function openClient(key,keepScroll){
         return `<button type="button" data-dm="${m.k}" class="${m.k===dMetric?'on':''}"><div class="l">${m.l}</div><div class="v">${L[m.k]}<small style="font-size:11px;color:var(--muted)">${m.u}</small></div><div class="c">${dd==null?'&nbsp;':deltaSpan(dd,m.gd,m.u==='%'?' pts':m.u)}</div></button>`; }).join('')}</div>
       ${lineChart(c.body.filter(b=>b[M.k]!=null),M.k,M.col,M.u.trim())}
       <div style="font-size:11.5px;color:var(--muted);margin-top:6px">Latest from ${SRC[c.bLast.source]||'—'}${c.body.some(b=>b.source!==c.bLast.source)?' · mixed devices, so compare trends with care':''}</div></div>`;
+  }
+
+  // weekly check-ins
+  if(c.checkins.length){
+    h+=`<div class="sec" style="background:none;border:none;box-shadow:none;padding:4px 0"><h3>Weekly check-ins <small>${c.checkins.length} total</small></h3>
+      <div class="rows">${c.checkins.slice().reverse().slice(0,4).map(ci=>checkinHtml(c,ci,false)).join('')}</div></div>`;
   }
 
   // setup answers
