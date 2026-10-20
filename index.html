@@ -1992,7 +1992,7 @@ ${currentUser}'s real data:
 - Habit hit-rates (last 7 logs): water ${a.rates.water}%, sleep ${a.rates.sleep}%, steps ${a.rates.steps}%, fruit/veg ${a.rates.fv}%, protein target ${a.rates.protein}%, no-alcohol ${a.rates.alcohol}%, exercise ${a.rates.exercise}%
 - Last 5 logged days:
 ${a.recentText || 'No logs yet.'}
-${a.trends.hasPrev?`- Week-on-week: avg score ${a.trends.thisWeek.avg} this week vs ${a.trends.lastWeek.avg} last week; protein ${a.trends.thisWeek.protein}% vs ${a.trends.lastWeek.protein}%; no-alcohol ${a.trends.thisWeek.alcohol}% vs ${a.trends.lastWeek.alcohol}%; exercise ${a.trends.thisWeek.exercise}% vs ${a.trends.lastWeek.exercise}%`:''}${typeof lcnProfilePrompt==='function'?lcnProfilePrompt():''}${typeof lcnBodyPrompt==='function'?lcnBodyPrompt():''}
+${a.trends.hasPrev?`- Week-on-week: avg score ${a.trends.thisWeek.avg} this week vs ${a.trends.lastWeek.avg} last week; protein ${a.trends.thisWeek.protein}% vs ${a.trends.lastWeek.protein}%; no-alcohol ${a.trends.thisWeek.alcohol}% vs ${a.trends.lastWeek.alcohol}%; exercise ${a.trends.thisWeek.exercise}% vs ${a.trends.lastWeek.exercise}%`:''}${typeof lcnProfilePrompt==='function'?lcnProfilePrompt():''}${typeof lcnBodyPrompt==='function'?lcnBodyPrompt():''}${typeof lcnCheckinPrompt==='function'?lcnCheckinPrompt():''}
 
 What they tell you in this conversation is real information about them. Use it, remember it within the session, and treat it as seriously as the logged numbers — especially when there are few logs. Never tell them you have no information about something they have just described to you.${lastSummaryRecap_()}`;
 
@@ -3316,7 +3316,23 @@ async function endAISession(){
       '\nMention this only when it is relevant to what they bring up. Focus on the trend over weeks, never a single reading, and never comment on their body or appearance.';
   };
 
-  window.lcnBody={ open:function(){ render(); load(); }, load:load };
+  /* Used by the weekly check-in: a plain weigh-in, skipped if that day already
+     has an entry (so it never overwrites a fuller InBody or smart-scale one). */
+  function quickAdd(weight,date){
+    date=date||todayStr();
+    if(!(weight>=25&&weight<=350)) return;
+    if(entries.some(function(x){return x.date===date;})) return;
+    var e={id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),date:date,source:'weight',
+      weight:r1(weight),muscle:null,bodyFat:null,fatMass:null,score:null,savedAt:Date.now()};
+    fetch(SCRIPT_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'addBodyComp',email:currentEmail,name:currentUser,id:e.id,date:date,weight:e.weight,source:'weight'})})
+    .then(function(){ pendingAdds[date]=e; entries.push(Object.assign({},e,{pending:true})); sortEntries(); saveCache();
+      if(isOpen()) render(); setTimeout(function(){ load(true); },2500); })
+    .catch(function(){});
+  }
+
+  window.lcnBody={ open:function(){ render(); load(); }, load:load, quickAdd:quickAdd,
+    entries:function(){ return entries.slice(); } };
 
   /* Load quietly after login so the AI coach has it too. */
   var _show=showApp;
@@ -3325,6 +3341,351 @@ async function endAISession(){
 })();
 </script>
 <!-- ══════════════ END BODY COMPOSITION TAB ══════════════ -->
+<!-- ══════════════ WEEKLY CHECK-IN (additive block) ══════════════
+     Sunday card on Log Today → one-minute check-in → AI weekly review.
+     Free gets a short review, Pro the full one (enforced in the Worker).
+     Saves to the "Check-ins" sheet via Checkins.gs. Doesn't count against
+     the daily AI message limit (the Worker's 'weekly' mode). -->
+<style>
+  .ci-card{border-radius:16px;padding:16px 18px;margin-bottom:16px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+  .ci-card.todo{background:linear-gradient(135deg,var(--green-dark),#5a9e2f 65%,#7dc44a);color:#fff}
+  .ci-card.done{background:var(--card);border:1px solid var(--border);border-left:4px solid var(--green)}
+  .ci-card .k{font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;opacity:.85}
+  .ci-card .h{font-family:"Nunito",sans-serif;font-size:20px;font-weight:900;margin:3px 0 4px;line-height:1.2}
+  .ci-card .p{font-size:13.5px;line-height:1.5;opacity:.92}
+  .ci-card.done .k{color:var(--green-dark);opacity:1}
+  .ci-card.done .h{color:var(--text);font-size:16px}
+  .ci-card .go{margin-top:12px;background:#fff;color:var(--green-dark);border:none;border-radius:10px;font-family:"Nunito",sans-serif;font-size:15px;font-weight:800;padding:11px 18px}
+  .ci-card .link{margin-top:8px;background:none;border:1.5px solid var(--border);border-radius:10px;color:var(--green-dark);font-weight:700;font-size:13px;padding:8px 14px}
+  .ci-card .x{position:absolute;top:8px;right:8px;width:34px;height:34px;border-radius:50%;border:none;background:rgba(255,255,255,.18);color:#fff;font-size:15px}
+  .ci-focus{background:var(--green-light);border-radius:10px;padding:9px 12px;font-size:13.5px;font-weight:600;color:var(--green-dark);margin-top:8px;line-height:1.45}
+
+  .ci-sheet{position:fixed;inset:0;z-index:300;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+  .ci-sheet[hidden]{display:none}
+  .ci-top{position:sticky;top:0;z-index:2;background:var(--white);border-bottom:3px solid var(--green);padding:12px 16px;display:flex;align-items:center;gap:12px}
+  .ci-top .t{font-family:"Nunito",sans-serif;font-size:19px;font-weight:900;color:var(--green-dark);line-height:1.15}
+  .ci-top .t small{display:block;font-family:"DM Sans",sans-serif;font-size:12px;font-weight:600;color:var(--muted)}
+  .ci-top .cl{margin-left:auto;width:40px;height:40px;border-radius:50%;border:1.5px solid var(--border);background:#fff;color:var(--muted);font-size:17px;flex:0 0 40px}
+  .ci-body{max-width:560px;margin:0 auto;padding:18px 16px 60px}
+  .ci-q{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px 14px 12px;margin-bottom:12px;box-shadow:var(--shadow)}
+  .ci-q .ql{font-family:"Nunito",sans-serif;font-size:16px;font-weight:800;color:var(--text);margin-bottom:10px}
+  .ci-q .ql small{display:block;font-family:"DM Sans",sans-serif;font-size:12.5px;font-weight:500;color:var(--muted);margin-top:2px}
+  .ci-q.miss{border-color:var(--red)}
+  .ci-scale{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+  .ci-scale button{background:#f8fdf4;border:2px solid var(--border);border-radius:12px;min-height:50px;font-family:"Nunito",sans-serif;font-size:19px;font-weight:800;color:var(--green-dark)}
+  .ci-scale.emo button{font-size:26px}
+  .ci-scale button.on{background:var(--green);border-color:var(--green);color:#fff}
+  .ci-scale.emo button.on{background:var(--green-light);border-color:var(--green)}
+  .ci-ends{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px}
+  .ci-chips{display:flex;flex-wrap:wrap;gap:6px}
+  .ci-chips button{background:#f8fdf4;border:2px solid var(--border);border-radius:20px;padding:9px 14px;font-weight:700;font-size:14px;color:var(--text)}
+  .ci-chips button.on{background:var(--green);border-color:var(--green);color:#fff}
+  .ci-q textarea{width:100%;background:#f8fdf4;border:2px solid var(--border);border-radius:12px;padding:12px;font-family:"DM Sans",sans-serif;font-size:16px;color:var(--text);min-height:74px;resize:vertical;outline:none}
+  .ci-q textarea:focus,.ci-q input:focus{border-color:var(--green)}
+  .ci-q input{width:100%;background:#f8fdf4;border:2px solid var(--border);border-radius:12px;padding:12px;font-family:"DM Sans",sans-serif;font-size:18px;font-weight:700;color:var(--text);outline:none}
+  .ci-lastfocus{background:var(--green-light);border-radius:10px;padding:9px 12px;font-size:14px;color:var(--green-dark);font-weight:600;margin-bottom:10px;line-height:1.45}
+  .ci-err{color:var(--red);font-weight:700;font-size:13.5px;min-height:18px;margin:4px 2px 8px}
+
+  .ci-load{text-align:center;padding:60px 20px;color:var(--muted)}
+  .ci-load .ring{width:46px;height:46px;border-radius:50%;border:4px solid var(--border);border-top-color:var(--green);margin:0 auto 16px;animation:btnspin .8s linear infinite}
+  .ci-load b{display:block;font-family:"Nunito",sans-serif;font-size:18px;color:var(--green-dark);margin-bottom:4px}
+
+  .ci-rev-hero{background:linear-gradient(135deg,var(--green-dark),#5a9e2f);color:#fff;border-radius:18px;padding:20px 18px;margin-bottom:12px;box-shadow:var(--shadow)}
+  .ci-rev-hero .k{font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;opacity:.8}
+  .ci-rev-hero .h{font-family:"Nunito",sans-serif;font-size:22px;font-weight:900;line-height:1.25;margin-top:4px}
+  .ci-sec{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px 16px;margin-bottom:12px;box-shadow:var(--shadow)}
+  .ci-sec h4{font-family:"Nunito",sans-serif;font-size:12.5px;font-weight:800;letter-spacing:1.3px;text-transform:uppercase;color:var(--green-dark);margin-bottom:6px}
+  .ci-sec p{font-size:14.5px;line-height:1.55;color:var(--text)}
+  .ci-sec ul{padding-left:18px;font-size:14.5px;line-height:1.55}
+  .ci-sec.focus{border:2px solid var(--green);background:#f6fbf1}
+  .ci-sec.focus .f{font-family:"Nunito",sans-serif;font-size:18px;font-weight:900;color:var(--green-dark);line-height:1.3}
+  .ci-sec.focus .why{font-size:13.5px;color:var(--muted);margin-top:6px;line-height:1.5}
+  .ci-sec.locked h4{color:var(--muted)}
+  .ci-sec.locked p{color:var(--muted);letter-spacing:2px;filter:blur(.4px)}
+  .ci-up{display:block;text-align:center;background:var(--green);color:#fff;text-decoration:none;font-family:"Nunito",sans-serif;font-weight:800;font-size:15px;padding:13px;border-radius:12px;margin:4px 0 12px}
+  .ci-mini{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .ci-mini span{background:rgba(255,255,255,.18);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:700}
+  .ci-done-btn{width:100%;background:none;border:1.5px solid var(--border);border-radius:12px;padding:12px;font-family:"Nunito",sans-serif;font-weight:800;font-size:15px;color:var(--green-dark)}
+</style>
+
+<div class="ci-sheet" id="ci-sheet" hidden role="dialog" aria-modal="true" aria-labelledby="ci-title">
+  <div class="ci-top"><div class="t" id="ci-title">Weekly check-in<small id="ci-range"></small></div>
+    <button type="button" class="cl" id="ci-close" aria-label="Close">✕</button></div>
+  <div class="ci-body" id="ci-body"></div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var el=function(id){return document.getElementById(id);};
+  var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});};
+  var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function ymd(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+  function addDays(s,n){ var d=new Date(s+'T12:00:00'); d.setDate(d.getDate()+n); return ymd(d); }
+  function nice(s){ var p=s.split('-'); return (+p[2])+' '+MON[+p[1]-1]; }
+  function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+  function lsSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+  function isPro(){ return currentTier==='pro' || (typeof justUpgraded!=='undefined' && justUpgraded); }
+
+  /* The check-in belongs to the week ending on Sunday. It opens on Sunday and
+     stays open Monday and Tuesday so a busy weekend doesn't mean missing it. */
+  function lastSunday(){ var d=new Date(); d.setHours(12,0,0,0); d.setDate(d.getDate()-d.getDay()); return ymd(d); }
+  function inWindow(){ return new Date().getDay()<=2; }   // Sun, Mon, Tue
+  function weekRange(w){ return nice(addDays(w,-6))+' – '+nice(w); }
+
+  var SCALES=[
+    {k:'energy',q:'Energy',lo:'Very low',hi:'Great'},
+    {k:'hunger',q:'Hunger',lo:'Rarely hungry',hi:'Hungry all the time'},
+    {k:'sleep', q:'Sleep quality',lo:'Poor',hi:'Great'},
+    {k:'stress',q:'Stress',lo:'Calm',hi:'Very stressed'}
+  ];
+  var OVERALL=['😣','🙁','😐','🙂','😄'];
+  var FOCUS_RESULTS=[['nailed','Nailed it 💪'],['partly','Partly'],['notreally','Not really']];
+
+  var list=[], loaded=false, ans=null, working=false;
+  function cacheKey(){ return 'lcn_checkins_'+currentEmail; }
+  function dismissKey(w){ return 'lcn_ci_dismiss_'+currentEmail+'_'+w; }
+  function saveCache(){ lsSet(cacheKey(),JSON.stringify(list)); }
+  function find(w){ return list.filter(function(c){return c.week===w;})[0]||null; }
+  function prevOf(w){ var p=list.filter(function(c){return c.week<w;}); return p[p.length-1]||null; }
+  function upsert(c){ list=list.filter(function(x){return x.week!==c.week;}).concat([c]); list.sort(function(a,b){return a.week<b.week?-1:1;}); saveCache(); }
+
+  function load(){
+    if(!currentEmail) return Promise.resolve(list);
+    try{ var c=JSON.parse(lsGet(cacheKey())||'null'); if(Array.isArray(c)) list=c; }catch(e){}
+    renderCard();
+    return fetchT(SCRIPT_URL+'?action=getMyCheckins&email='+encodeURIComponent(currentEmail),{},12000)
+      .then(function(r){ return r.json(); })
+      .then(function(rows){
+        if(!Array.isArray(rows)) return;
+        var byWeek={}; rows.forEach(function(r){ byWeek[r.week]=r; });
+        list.forEach(function(l){ if(!byWeek[l.week] || (!byWeek[l.week].review && l.review)) byWeek[l.week]=l; });   // keep local not-yet-synced
+        list=Object.keys(byWeek).sort().map(function(k){ return byWeek[k]; });
+        saveCache();
+      })
+      .catch(function(){})
+      .then(function(){ loaded=true; renderCard(); return list; });
+  }
+
+  // ── the card at the top of Log Today ──
+  function renderCard(){
+    var tab=el('tab-log'); if(!tab||!currentEmail) return;
+    var card=el('ci-card');
+    if(!card){ card=document.createElement('div'); card.id='ci-card'; tab.insertBefore(card,tab.firstChild); }
+    var w=lastSunday(), done=find(w), h='';
+    if(inWindow() && !done){
+      if(lsGet(dismissKey(w))){ card.innerHTML=''; return; }
+      var prev=prevOf(w);
+      h='<div class="ci-card todo"><button type="button" class="x" id="ci-dismiss" aria-label="Hide until next week">✕</button>'+
+        '<div class="k">Weekly check-in · '+esc(weekRange(w))+'</div>'+
+        '<div class="h">How did your week go?</div>'+
+        '<div class="p">One minute to look back, then get your weekly review'+(prev&&prev.review&&prev.review.focus?' and see how you got on with last week’s focus':'')+'.</div>'+
+        '<button type="button" class="go" id="ci-start">Start check-in →</button></div>';
+    } else {
+      // Done this week, or mid-week: keep the current focus in view all week
+      var cur=done || list.filter(function(c){ return c.week>=addDays(w,-7); }).slice(-1)[0];
+      if(cur && cur.review && cur.review.focus){
+        h='<div class="ci-card done"><div class="k">'+(done&&inWindow()?'✓ Checked in · ':'')+'Your focus this week</div>'+
+          '<div class="ci-focus">🎯 '+esc(cur.review.focus)+'</div>'+
+          '<button type="button" class="link" id="ci-view" data-w="'+esc(cur.week)+'">View your weekly review</button></div>';
+      } else if(done && !done.review){
+        h='<div class="ci-card done"><div class="k">✓ Checked in</div><div class="h">Your review didn’t come through</div>'+
+          '<button type="button" class="link" id="ci-retry">Get my weekly review</button></div>';
+      }
+    }
+    card.innerHTML=h;
+    if(el('ci-start')) el('ci-start').onclick=function(){ openCheckin(); };
+    if(el('ci-dismiss')) el('ci-dismiss').onclick=function(){ lsSet(dismissKey(w),'1'); renderCard(); };
+    if(el('ci-view')) el('ci-view').onclick=function(){ var c=find(this.dataset.w); openSheet(c.week); renderReview(c); };
+    if(el('ci-retry')) el('ci-retry').onclick=function(){ var c=find(w); openSheet(w); getReview(c); };
+  }
+
+  // ── the check-in sheet ──
+  function openSheet(w){
+    el('ci-range').textContent='Week of '+weekRange(w);
+    el('ci-sheet').hidden=false; el('ci-sheet').scrollTop=0;
+    document.body.style.overflow='hidden';
+  }
+  function closeSheet(){ el('ci-sheet').hidden=true; document.body.style.overflow=''; renderCard(); }
+  el('ci-close').onclick=closeSheet;
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&!el('ci-sheet').hidden&&!working) closeSheet(); });
+
+  function openCheckin(){
+    var w=lastSunday(), prev=prevOf(w), ex=find(w);
+    ans=ex?Object.assign({},ex):{week:w};
+    ans.week=w;
+    ans.lastFocus=prev&&prev.review&&prev.review.focus||'';
+    openSheet(w);
+    renderForm();
+  }
+
+  function scaleHtml(k,lo,hi,emo){
+    var b='';
+    for(var i=1;i<=5;i++) b+='<button type="button" data-k="'+k+'" data-v="'+i+'" class="'+(Number(ans[k])===i?'on':'')+'" aria-label="'+i+' of 5">'+(emo?OVERALL[i-1]:i)+'</button>';
+    return '<div class="ci-scale'+(emo?' emo':'')+'">'+b+'</div><div class="ci-ends"><span>'+lo+'</span><span>'+hi+'</span></div>';
+  }
+  function renderForm(){
+    var last=window.lcnBody&&lcnBody.entries().slice(-1)[0];
+    var h='<div class="ci-q" data-q="overall"><div class="ql">Overall, how did the week go?</div>'+scaleHtml('overall','Rough','Brilliant',true)+'</div>';
+    SCALES.forEach(function(s){ h+='<div class="ci-q" data-q="'+s.k+'"><div class="ql">'+s.q+'</div>'+scaleHtml(s.k,s.lo,s.hi,false)+'</div>'; });
+    if(ans.lastFocus){
+      h+='<div class="ci-q" data-q="focusResult"><div class="ql">Last week’s focus</div><div class="ci-lastfocus">🎯 '+esc(ans.lastFocus)+'</div>'+
+        '<div class="ci-chips">'+FOCUS_RESULTS.map(function(f){ return '<button type="button" data-fr="'+f[0]+'" class="'+(ans.focusResult===f[0]?'on':'')+'">'+f[1]+'</button>'; }).join('')+'</div></div>';
+    }
+    h+='<div class="ci-q"><div class="ql">Biggest win this week<small>Big or small. Optional.</small></div><textarea id="ci-win" maxlength="500" placeholder="e.g. Meal prepped on Sunday and it lasted till Thursday">'+esc(ans.win||'')+'</textarea></div>'+
+       '<div class="ci-q"><div class="ql">What got in the way?<small>Optional, but it makes your review much more useful.</small></div><textarea id="ci-struggle" maxlength="500" placeholder="e.g. Late nights at work, ended up getting takeaway">'+esc(ans.struggle||'')+'</textarea></div>'+
+       '<div class="ci-q"><div class="ql">Weigh-in<small>Optional. Kilograms, first thing in the morning if you can.</small></div><input id="ci-weight" type="number" inputmode="decimal" step="0.1" min="25" max="350" placeholder="'+(last&&last.weight?'Last: '+last.weight:'e.g. 72.4')+'" value="'+esc(ans.weight||'')+'"></div>'+
+       '<div class="ci-err" id="ci-err"></div><button type="button" class="submit-btn" id="ci-submit">Get my weekly review →</button>';
+    el('ci-body').innerHTML=h;
+    el('ci-body').querySelectorAll('[data-k]').forEach(function(b){ b.onclick=function(){
+      ans[b.dataset.k]=Number(b.dataset.v);
+      b.parentNode.querySelectorAll('button').forEach(function(x){ x.classList.toggle('on',x===b); });
+      var q=b.closest('.ci-q'); if(q) q.classList.remove('miss');
+    }; });
+    el('ci-body').querySelectorAll('[data-fr]').forEach(function(b){ b.onclick=function(){
+      ans.focusResult=b.dataset.fr; b.parentNode.querySelectorAll('button').forEach(function(x){ x.classList.toggle('on',x===b); });
+      var q=b.closest('.ci-q'); if(q) q.classList.remove('miss');
+    }; });
+    el('ci-submit').onclick=submit;
+  }
+
+  function submit(){
+    if(working) return;
+    ans.win=el('ci-win').value.trim(); ans.struggle=el('ci-struggle').value.trim();
+    var wv=el('ci-weight').value; ans.weight=wv===''?'':Number(wv);
+    var missing=['overall'].concat(SCALES.map(function(s){return s.k;})).filter(function(k){ return !ans[k]; });
+    if(ans.lastFocus && !ans.focusResult) missing.push('focusResult');
+    el('ci-body').querySelectorAll('.ci-q').forEach(function(q){ q.classList.toggle('miss',missing.indexOf(q.dataset.q)>-1); });
+    if(missing.length){ el('ci-err').textContent='Tap an answer for the questions outlined in red.';
+      var first=el('ci-body').querySelector('.ci-q.miss'); if(first) first.scrollIntoView({block:'center',behavior:'smooth'}); return; }
+    if(ans.weight!==''&&!(ans.weight>=25&&ans.weight<=350)){ el('ci-err').textContent='That weight doesn’t look right. It should be in kg.'; return; }
+    el('ci-err').textContent='';
+
+    var c={week:ans.week,overall:ans.overall,energy:ans.energy,hunger:ans.hunger,sleep:ans.sleep,stress:ans.stress,
+      lastFocus:ans.lastFocus,focusResult:ans.focusResult||'',win:ans.win,struggle:ans.struggle,weight:ans.weight,
+      review:null,submittedAt:new Date().toISOString()};
+    upsert(c);
+    post(c);                                   // answers are safe even if the review fails
+    if(ans.weight!=='' && window.lcnBody) lcnBody.quickAdd(ans.weight);
+    getReview(c);
+  }
+  function post(c){
+    return fetch(SCRIPT_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(Object.assign({action:'addCheckin',email:currentEmail,name:currentUser,tier:currentTier},c))}).catch(function(){});
+  }
+
+  // ── the AI review ──
+  function stats(from,to){
+    var logs=(allLogs||[]).filter(function(l){ return l['Client Email']?l['Client Email']===currentEmail:l['Client Name']===currentUser; })
+      .map(normalizeAILog).filter(function(l){ var d=String(l['Date']).slice(0,10); return d>=from&&d<=to; });
+    var byDay={}; logs.forEach(function(l){ byDay[String(l['Date']).slice(0,10)]=l; });
+    var days=Object.keys(byDay).map(function(k){return byDay[k];});
+    if(!days.length) return null;
+    var pct=function(f){ return Math.round(days.filter(f).length/days.length*100); };
+    var avg=function(k){ var v=days.map(function(l){return parseFloat(l[k]);}).filter(function(x){return x>0;}); return v.length?Math.round(v.reduce(function(a,b){return a+b;},0)/v.length*10)/10:null; };
+    return {days:days.length,score:Math.round(days.reduce(function(a,l){return a+calcLogScore(l);},0)/days.length),
+      protein:pct(function(l){return l['Protein Target Hit']==='Yes';}),noAlcohol:pct(function(l){return l['No Alcohol']==='Yes';}),
+      exercise:pct(function(l){return l['Exercise Completed']==='Yes';}),
+      water:avg('Water (L)'),sleep:avg('Sleep (hrs)'),steps:avg('Steps'),fv:avg('Fruit & Veg Portions'),
+      notes:days.map(function(l){return l['Notes'];}).filter(Boolean).slice(-4)};
+  }
+  function statLine(s){
+    if(!s) return 'no days logged';
+    return s.days+'/7 days logged, average score '+s.score+'/100, protein target hit '+s.protein+'% of days, alcohol-free '+s.noAlcohol+'%, exercised '+s.exercise+'%'+
+      (s.water!=null?', water avg '+s.water+'L':'')+(s.sleep!=null?', sleep avg '+s.sleep+'h':'')+(s.steps!=null?', steps avg '+Math.round(s.steps):'')+(s.fv!=null?', fruit & veg avg '+s.fv+' portions':'');
+  }
+  function brief(c){
+    var w=c.week, tw=stats(addDays(w,-6),w), lw=stats(addDays(w,-13),addDays(w,-7));
+    var prev=prevOf(w), body=window.lcnBody?lcnBody.entries():[];
+    var L=body[body.length-1], F4=body.filter(function(b){ return b.date>=addDays(w,-34); })[0];
+    var lines=[
+      'You are the Lean Comp Nutrition coach writing '+currentUser+'’s weekly review for the week '+weekRange(w)+'.',
+      'Voice: direct, warm, specific, like a real coach who knows their numbers. Irish/UK spelling. No fluff, no emojis in the text.',
+      'Never invent a number that is not below. Never comment on their body or appearance. If they had a rough week, be kind and practical, never guilt-tripping.',
+      '',
+      'THIS WEEK’S LOGS: '+statLine(tw),
+      (tw&&tw.notes.length?'Their notes this week: '+tw.notes.map(function(n){return '"'+String(n).slice(0,140)+'"';}).join('; '):''),
+      'LAST WEEK’S LOGS: '+statLine(lw),
+      '',
+      'THEIR CHECK-IN (1-5): overall '+c.overall+', energy '+c.energy+', hunger '+c.hunger+' (5 = hungry all the time), sleep quality '+c.sleep+', stress '+c.stress+' (5 = very stressed).',
+      (c.win?'Biggest win (their words): "'+c.win+'"':'No win given.'),
+      (c.struggle?'What got in the way (their words): "'+c.struggle+'"':'Nothing given for what got in the way.'),
+      (c.lastFocus?'Last week’s focus was: "'+c.lastFocus+'". They said: '+({nailed:'nailed it',partly:'partly',notreally:'not really'}[c.focusResult]||'no answer')+'.':'This is their first weekly check-in.'),
+      (prev?'LAST WEEK’S CHECK-IN (1-5): overall '+prev.overall+', energy '+prev.energy+', hunger '+prev.hunger+', sleep '+prev.sleep+', stress '+prev.stress+'.':''),
+      (L?'BODY: latest weight '+L.weight+' kg ('+L.date+')'+(F4&&F4!==L?', '+F4.weight+' kg on '+F4.date:'')+'. Only mention weight if it is relevant; trends over weeks, never single readings.':''),
+      (c.weight!==''&&c.weight!=null?'They weighed in today at '+c.weight+' kg.':'')
+    ];
+    var prof=typeof lcnProfilePrompt==='function'?lcnProfilePrompt():'';
+    return lines.filter(function(x){return x!=='';}).join('\n')+prof;
+  }
+
+  function getReview(c){
+    working=true;
+    el('ci-body').innerHTML='<div class="ci-load"><div class="ring"></div><b>Looking back at your week…</b>This takes a few seconds.</div>';
+    fetchT(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({clientId:currentEmail,mode:'weekly',system:brief(c),
+        messages:[{role:'user',content:'Write my weekly review.'}]})},45000)
+    .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,d:d}; }); })
+    .then(function(x){
+      if(!x.ok){ var er=new Error((x.d&&x.d.error)||'proxy_error'); er.userMsg=x.d&&x.d.message; throw er; }
+      if(x.d.tier && typeof setTier==='function') setTier(x.d.tier,currentEmail);
+      var rev=x.d.review||null;
+      if(!rev){ try{ rev=JSON.parse(String(x.d.text||'').replace(/```json|```/g,'').trim()); }catch(e){ rev={headline:String(x.d.text||'').slice(0,600)}; } }
+      rev.tier=x.d.tier||currentTier;
+      c.review=rev; upsert(c); post(c);
+      working=false;
+      renderReview(c);
+    })
+    .catch(function(err){
+      working=false;
+      el('ci-body').innerHTML='<div class="ci-sec"><h4>Check-in saved ✓</h4><p>'+esc(err&&err.userMsg||'Your answers are in, but the review couldn’t be written just now. Check your connection and try again.')+'</p></div>'+
+        '<button type="button" class="submit-btn" id="ci-again">Try again</button>';
+      el('ci-again').onclick=function(){ getReview(c); };
+    });
+  }
+
+  function renderReview(c){
+    var r=c.review||{}, pro=(r.tier||currentTier)==='pro'||isPro();
+    var mini=['overall','energy','sleep'].map(function(k){ return k==='overall'?OVERALL[(c.overall||3)-1]+' week':(k.charAt(0).toUpperCase()+k.slice(1))+' '+c[k]+'/5'; });
+    var h='<div class="ci-rev-hero"><div class="k">Your weekly review</div><div class="h">'+esc(r.headline||'Thanks for checking in.')+'</div>'+
+      '<div class="ci-mini">'+mini.map(function(m){return '<span>'+esc(m)+'</span>';}).join('')+'</div></div>';
+    if(r.week_on_week) h+='<div class="ci-sec"><h4>📈 Week on week</h4><p>'+esc(r.week_on_week)+'</p></div>';
+    if(r.went_well) h+='<div class="ci-sec"><h4>✅ What went well</h4><p>'+esc(r.went_well)+'</p></div>';
+    if(r.to_work_on) h+='<div class="ci-sec"><h4>🔧 What to work on</h4><p>'+esc(r.to_work_on)+'</p></div>';
+    if(r.focus) h+='<div class="ci-sec focus"><h4>🎯 Your focus this week</h4><div class="f">'+esc(r.focus)+'</div>'+(r.focus_why?'<div class="why">'+esc(r.focus_why)+'</div>':'')+'</div>';
+    if(!pro){
+      var href=STRIPE_PAYMENT_LINK?STRIPE_PAYMENT_LINK+'?prefilled_email='+encodeURIComponent(currentEmail):'';
+      h+='<div class="ci-sec locked"><h4>🔒 Week on week</h4><p>••••• •••• ••• ••••••• •• •••• ••••• ••••</p></div>'+
+         '<div class="ci-sec locked"><h4>🔒 What to work on</h4><p>•••• ••••••• ••• •••• •••••• ••• •••</p></div>'+
+         (href?'<a class="ci-up" href="'+href+'" target="_blank" rel="noopener">Unlock your full weekly review: go Pro →</a>':'');
+    }
+    h+='<button type="button" class="ci-done-btn" id="ci-fin">Done</button>';
+    el('ci-body').innerHTML=h; el('ci-sheet').scrollTop=0;
+    el('ci-fin').onclick=closeSheet;
+  }
+
+  // ── daily AI coach: knows this week's check-in and focus ──
+  window.lcnCheckinPrompt=function(){
+    var c=list.filter(function(x){ return x.week>=addDays(lastSunday(),-7); }).slice(-1)[0];
+    if(!c) return '';
+    return '\n\nTheir latest weekly check-in (week ending '+c.week+'): overall '+c.overall+'/5, energy '+c.energy+'/5, hunger '+c.hunger+'/5, sleep '+c.sleep+'/5, stress '+c.stress+'/5.'+
+      (c.win?' Win: "'+String(c.win).slice(0,200)+'".':'')+(c.struggle?' What got in the way: "'+String(c.struggle).slice(0,200)+'".':'')+
+      (c.review&&c.review.focus?'\nTheir focus for this week (from the weekly review): "'+c.review.focus+'". Check in on it when it fits naturally.':'');
+  };
+
+  window.lcnCheckin={ open:openCheckin, load:load };
+
+  /* Load after login; a link like app.leancompnutrition.com/?checkin=1 (e.g.
+     from the Sunday email) opens the check-in straight away. */
+  var wantOpen=new URLSearchParams(location.search).get('checkin')==='1';
+  if(wantOpen){ try{ var u=new URL(location.href); u.searchParams.delete('checkin'); history.replaceState({},'',u.pathname+u.search+u.hash); }catch(e){} }
+  function boot(){ list=[]; loaded=false; load().then(function(){ if(wantOpen){ wantOpen=false; var w=lastSunday(), d=find(w); if(d&&d.review){ openSheet(w); renderReview(d); } else openCheckin(); } }); }
+  var _show=showApp;
+  showApp=function(){ _show.apply(this,arguments); setTimeout(boot,600); };
+  if(currentEmail && el('app-section') && el('app-section').style.display==='block') setTimeout(boot,600);
+})();
+</script>
+<!-- ══════════════ END WEEKLY CHECK-IN ══════════════ -->
 
 </body>
 </html>
