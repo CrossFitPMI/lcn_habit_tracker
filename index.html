@@ -3687,5 +3687,454 @@ async function endAISession(){
 </script>
 <!-- ══════════════ END WEEKLY CHECK-IN ══════════════ -->
 
+<!-- ══════════════ APP SHELL v2: Home, bottom menu, Profile (additive block) ══════════════
+     Re-arranges the existing screens into a Home / Track / Learn / Plan / Coach
+     layout with a bottom menu, and adds a Profile sheet (opened from the avatar
+     top-right). Every existing screen, form and function is reused as-is:
+     this block moves elements and wraps switchTab/showApp, nothing more.
+     Profile extras (why, diet, allergies) live inside the same profile JSON the
+     first-run setup already saves via setProfile — no new backend needed. -->
+<style>
+  body.v2{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+  body.v2 .hero,body.v2 #app-section>.tabs{display:none}
+  body.v2 .nav{padding:8px 16px;border-bottom-width:2px}
+  body.v2 .nav img{height:42px}
+  body.v2 .nav-title{font-size:15px}
+  body.v2 .nav-user{display:none!important}
+  body.v2 .main{padding-top:18px}
+  /* The floating install pill covered content once the bottom menu existed;
+     install now lives on Home (until installed) and in Profile. */
+  body.v2 #installAppBtn{display:none!important}
+  body.v2 #tab-aicoach .onb-reopen{display:none}
+
+  .v2-avatar{display:none;width:42px;height:42px;border-radius:50%;border:2px solid var(--green);background:var(--green-light);color:var(--green-dark);font-family:"Nunito",sans-serif;font-weight:900;font-size:15px;cursor:pointer;align-items:center;justify-content:center;flex-shrink:0}
+  body.v2 .v2-avatar{display:flex}
+
+  /* bottom menu */
+  .v2-nav{display:none;position:fixed;left:0;right:0;bottom:0;z-index:140;background:var(--white);border-top:1px solid var(--border);box-shadow:0 -4px 18px rgba(61,122,26,.08);padding:6px 4px calc(6px + env(safe-area-inset-bottom))}
+  body.v2 .v2-nav{display:block}
+  .v2-nav-in{max-width:680px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr)}
+  .v2-nav button{background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;color:var(--muted);font-family:"Nunito",sans-serif;font-size:11px;font-weight:800;letter-spacing:.3px;border-radius:12px;min-height:52px}
+  .v2-nav svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .v2-nav button.on{color:var(--green-dark);background:var(--green-light)}
+
+  /* Track sub-menu */
+  .v2-seg{display:none;gap:6px;margin-bottom:18px;background:var(--white);border:1px solid var(--border);border-radius:14px;padding:5px}
+  .v2-seg button{flex:1;background:none;border:none;border-radius:10px;padding:10px 4px;font-family:"Nunito",sans-serif;font-size:13px;font-weight:800;color:var(--muted);cursor:pointer}
+  .v2-seg button.on{background:var(--green);color:#fff}
+
+  /* shared cards */
+  .v2-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px;box-shadow:var(--shadow);margin-bottom:14px}
+  .v2-k{font-size:11px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+  .v2-h{font-family:"Nunito",sans-serif;font-size:19px;font-weight:900;color:var(--green-dark);line-height:1.25}
+  .v2-p{font-size:14px;color:var(--text);line-height:1.55;margin-top:6px}
+  .v2-btn{display:block;width:100%;background:var(--green);color:#fff;border:none;border-radius:12px;font-family:"Nunito",sans-serif;font-size:16px;font-weight:800;padding:13px;cursor:pointer;margin-top:14px;text-align:center;text-decoration:none}
+  .v2-btn.ghost{background:none;color:var(--green-dark);border:1.5px solid var(--border)}
+  .v2-pill{display:inline-block;font-size:10.5px;font-weight:900;letter-spacing:.8px;text-transform:uppercase;border-radius:20px;padding:3px 9px;vertical-align:2px}
+  .v2-pill.pro{background:var(--green-dark);color:#fff}
+  .v2-pill.soon{background:#fff3d6;color:#8a5a00}
+  .v2-pill.free{background:var(--green-light);color:var(--green-dark)}
+
+  /* Home */
+  .v2-greet{font-family:"Nunito",sans-serif;font-size:24px;font-weight:900;color:var(--green-dark);line-height:1.2}
+  .v2-date{font-size:13px;color:var(--muted);font-weight:600;margin:4px 0 16px}
+  .v2-quote{background:linear-gradient(135deg,var(--green-dark),#5a9e2f);color:#fff;border:none;position:relative;overflow:hidden}
+  .v2-quote .v2-k{color:rgba(255,255,255,.7)}
+  .v2-quote blockquote{font-family:"Nunito",sans-serif;font-size:20px;font-weight:800;line-height:1.35}
+  .v2-quote cite{display:block;font-style:normal;font-size:12.5px;color:rgba(255,255,255,.8);margin-top:8px}
+  .v2-quote-ack{margin-top:14px;background:rgba(255,255,255,.18);color:#fff;border:1.5px solid rgba(255,255,255,.5);border-radius:20px;padding:7px 14px;font-weight:800;font-size:13px;cursor:pointer;font-family:"Nunito",sans-serif}
+  .v2-quote-ack.done{background:#fff;color:var(--green-dark);border-color:#fff}
+  .v2-today{display:flex;align-items:center;gap:16px}
+  .v2-ring{width:74px;height:74px;flex-shrink:0;position:relative}
+  .v2-ring svg{width:74px;height:74px;transform:rotate(-90deg)}
+  .v2-ring b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:"Nunito",sans-serif;font-size:20px;font-weight:900;color:var(--green-dark)}
+  body.v2 #tab-home .streak-bar{border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:14px}
+  .v2-lesson{display:flex;gap:14px;align-items:center;cursor:pointer}
+  .v2-lesson-n{width:54px;height:54px;border-radius:14px;background:var(--green-light);color:var(--green-dark);display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:"Nunito",sans-serif;flex-shrink:0}
+  .v2-lesson-n small{font-size:9.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase}
+  .v2-lesson-n b{font-size:22px;font-weight:900;line-height:1}
+  .v2-arrow{margin-left:auto;color:var(--muted);font-size:20px}
+
+  /* Learn */
+  .v2-week{display:flex;gap:12px;align-items:center;padding:13px 0;border-bottom:1px solid var(--border)}
+  .v2-week:last-child{border-bottom:none}
+  .v2-week .n{width:36px;height:36px;border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:"Nunito",sans-serif;font-weight:900;color:var(--muted);flex-shrink:0}
+  .v2-week.now .n{background:var(--green);border-color:var(--green);color:#fff}
+  .v2-week.past .n{border-color:var(--green);color:var(--green-dark)}
+  .v2-week .t{font-weight:700;font-size:15px}
+  .v2-week .x{font-size:12px;color:var(--muted);margin-top:2px}
+  .v2-week.future{opacity:.55}
+
+  /* Profile sheet */
+  .v2-sheet{position:fixed;inset:0;z-index:300;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .v2-sheet[hidden]{display:none}
+  .v2-sheet-top{position:sticky;top:0;z-index:2;background:var(--white);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:12px 16px}
+  .v2-sheet-top h2{font-family:"Nunito",sans-serif;font-size:18px;font-weight:900;color:var(--green-dark)}
+  .v2-x{width:42px;height:42px;border-radius:50%;border:none;background:var(--green-light);color:var(--green-dark);font-size:18px;cursor:pointer}
+  .v2-sheet-in{max-width:680px;margin:0 auto;padding:18px 16px 40px}
+  .v2-me{text-align:center;margin:6px 0 18px}
+  .v2-me .big{width:84px;height:84px;border-radius:50%;margin:0 auto 10px;background:var(--green-light);border:3px solid var(--green);color:var(--green-dark);display:flex;align-items:center;justify-content:center;font-family:"Nunito",sans-serif;font-size:30px;font-weight:900}
+  .v2-me .nm{font-family:"Nunito",sans-serif;font-size:20px;font-weight:900}
+  .v2-me .em{font-size:13px;color:var(--muted);margin-top:2px}
+  .v2-q{font-size:14px;font-weight:700;margin:14px 0 6px;line-height:1.4}
+  .v2-ta{width:100%;min-height:80px;background:#f8fdf4;border:2px solid var(--border);border-radius:12px;padding:12px;font-family:"DM Sans",sans-serif;font-size:15px;color:var(--text);resize:vertical;outline:none}
+  .v2-ta:focus{border-color:var(--green)}
+  .v2-chips{display:flex;flex-wrap:wrap;gap:8px}
+  .v2-chip{background:#fff;border:1.5px solid var(--border);border-radius:20px;padding:8px 14px;font-size:13.5px;font-weight:700;color:var(--text);cursor:pointer;font-family:"DM Sans",sans-serif}
+  .v2-chip.on{background:var(--green);border-color:var(--green);color:#fff}
+  .v2-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:4px}
+  .v2-tile{background:var(--green-light);border-radius:12px;padding:10px 4px;text-align:center}
+  .v2-tile b{display:block;font-family:"Nunito",sans-serif;font-size:18px;font-weight:900;color:var(--green-dark)}
+  .v2-tile span{font-size:10.5px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  .v2-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 0;border-bottom:1px solid var(--border);font-size:14.5px}
+  .v2-row:last-child{border-bottom:none}
+  .v2-link{background:none;border:none;color:var(--green-dark);font-weight:800;font-size:14px;cursor:pointer;text-decoration:none;font-family:"DM Sans",sans-serif;padding:0}
+  .v2-saved{font-size:13px;color:var(--green-dark);font-weight:700;text-align:center;margin-top:8px;min-height:18px}
+  .v2-note{font-size:12px;color:var(--muted);line-height:1.5;margin-top:8px}
+</style>
+
+<nav class="v2-nav" id="v2-nav" aria-label="Main menu"><div class="v2-nav-in">
+  <button type="button" data-go="home"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg>Home</button>
+  <button type="button" data-go="log"><svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg>Track</button>
+  <button type="button" data-go="learn"><svg viewBox="0 0 24 24"><path d="M2 5h7a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H2z"/><path d="M22 5h-7a3 3 0 0 0-3 3v13a2 2 0 0 1 2-2h8z"/></svg>Learn</button>
+  <button type="button" data-go="plan"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/></svg>Plan</button>
+  <button type="button" data-go="aicoach"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>Coach</button>
+</div></nav>
+
+<div class="v2-sheet" id="v2-profile" hidden role="dialog" aria-modal="true" aria-label="Your profile">
+  <div class="v2-sheet-top"><h2>Your profile</h2><button class="v2-x" type="button" data-close aria-label="Close">✕</button></div>
+  <div class="v2-sheet-in" id="v2-profile-in"></div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var el=function(id){return document.getElementById(id);};
+  var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});};
+
+  /* ── Content: the 12-week programme and its weekly quotes ──
+     Quotes are short lines from Jon Goodman's "55 Rules for Humans" (PTDC),
+     always credited. Permission to use them in the app is being requested. */
+  var QUOTE_SRC='Jon Goodman, 55 Rules for Humans';
+  var WEEKS=[
+    {t:'The Why',                     x:'Why you’re not losing fat',                            q:'The best investment you can make is in your own health.'},
+    {t:'Habit 1: Water',              x:'Water guide',                                         q:'Bring a water bottle.'},
+    {t:'Habit 2: Sleep',              x:'Sleep resources',                                     q:'Sunlight before screen light.'},
+    {t:'Habit 3: The Plate Method',   x:'Plate Method guide',                                  q:'Make your bed. Begin your day with a positive action.'},
+    {t:'Portion Control',             x:'The weekly shop',                                     q:'Don’t restrict yourself. Enjoy it, just don’t mindlessly consume it.'},
+    {t:'The Golden Rule',             x:'How calories work',                                   q:'Don’t drink your calories.'},
+    {t:'Reading Nutrition Labels',    x:'Macronutrients',                                      q:'Work, or do nothing.'},
+    {t:'Food Swaps',                  x:'Tracking calories, training vs rest days, banking',   q:'Order the first thing.'},
+    {t:'The Big Clear Out',           x:'Processed foods',                                     q:'No candy in the cupboard.'},
+    {t:'Dealing With Cravings',       x:'Eating out',                                          q:'Count to ten.'},
+    {t:'Alcohol',                     x:'Supplements & vitamins',                              q:'Show up or don’t.'},
+    {t:'Overcoming Plateaus',         x:'Non-scale victories',                                 q:'Leave two reps in the hole.'}
+  ];
+  var DIETS=['Vegetarian','Vegan','Pescatarian','Gluten-free','Dairy-free','Nut-free','Low carb','High protein'];
+  var ALLERGIES=['Dairy','Egg','Fish','Shellfish','Peanuts','Tree nuts','Soy','Gluten','Sesame'];
+  /* What each diet rules out, added to the meal-plan avoid list (a hard rule). */
+  var DIET_AVOID={'Vegetarian':['meat','poultry','fish','shellfish'],'Vegan':['meat','poultry','fish','shellfish','dairy','eggs','honey'],
+    'Pescatarian':['meat','poultry'],'Gluten-free':['gluten'],'Dairy-free':['dairy'],'Nut-free':['peanuts','tree nuts']};
+  var GOALS={lose:'Lose fat',maintain:'Maintain & feel better',gain:'Build muscle',energy:'More energy'};
+  var TRACK=['log','history','body','streaks'];
+  var ALL=['home','learn','plan','log','history','body','streaks','aicoach'];
+
+  /* ── profile helpers (same storage + endpoint as the first-run setup) ── */
+  function pKey(){ return 'lcn_profile_'+currentEmail; }
+  function getP(){ try{ var v=localStorage.getItem(pKey()); return v?JSON.parse(v):null; }catch(e){ return null; } }
+  function blankP(){ return {v:1,goal:null,answers:{},ratings:{},body:{hunit:'cm',wunit:'kg',pace:'steady'},targets:null,about:{work:'',challenge:''}}; }
+  function saveP(p){
+    p.updatedAt=new Date().toISOString();
+    try{ localStorage.setItem(pKey(),JSON.stringify(p)); }catch(e){}
+    try{ fetch(SCRIPT_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({action:'setProfile',email:currentEmail,name:currentUser,profile:p})}); }catch(e){}
+  }
+  function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+  function lsSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+  function isPro(){ return currentTier==='pro' || (typeof justUpgraded!=='undefined' && justUpgraded); }
+  function firstName(){ return String(currentUser||'').trim().split(/\s+/)[0]||''; }
+  function initials(){ var p=String(currentUser||'').trim().split(/\s+/); return ((p[0]||'?')[0]+(p[1]?p[1][0]:'')).toUpperCase(); }
+  function myLogs(){ return (allLogs||[]).filter(function(l){ return l['Client Email']?l['Client Email']===currentEmail:l['Client Name']===currentUser; }); }
+
+  /* Programme week: counted from when they finished setup, else their first
+     log, else today. Weeks past 12 keep cycling the quotes. */
+  function startDate(){
+    var p=getP(); var c=p&&(p.completedAt||p.updatedAt);
+    var dates=myLogs().map(function(l){return String(l['Date']||'').slice(0,10);}).filter(Boolean).sort();
+    var s=c?String(c).slice(0,10):(dates[0]||today());
+    if(dates[0] && dates[0]<s) s=dates[0];
+    return s;
+  }
+  function weekIndex(){ var d=Math.floor((Date.parse(today())-Date.parse(startDate()))/864e5); return Math.max(0,Math.floor(d/7)); }
+
+  /* ── build the layout once ── */
+  var app=el('app-section'), home, learn, plan, seg;
+  function build(){
+    if(home) return;
+    home=document.createElement('div'); home.id='tab-home'; home.style.display='none';
+    learn=document.createElement('div'); learn.id='tab-learn'; learn.style.display='none';
+    plan=document.createElement('div'); plan.id='tab-plan'; plan.style.display='none';
+    seg=document.createElement('div'); seg.className='v2-seg'; seg.id='v2-seg';
+    seg.innerHTML='<button type="button" data-go="log">Log</button><button type="button" data-go="history">History</button><button type="button" data-go="body">Body</button><button type="button" data-go="streaks">Streaks</button>';
+    var first=el('tab-log');
+    app.insertBefore(home,app.firstChild);
+    app.insertBefore(seg,first);
+    app.appendChild(learn); app.appendChild(plan);
+
+    /* Home: greeting, quote, today, stats (the existing streak bar), lesson, coach */
+    home.innerHTML='<div class="v2-greet" id="v2-greet"></div><div class="v2-date" id="v2-date"></div>'+
+      '<div class="v2-card v2-quote" id="v2-quote"></div>'+
+      '<div class="v2-card" id="v2-today"></div>'+
+      '<div id="v2-stats-slot"></div>'+
+      '<div class="v2-card v2-lesson" id="v2-lesson" data-go="learn"></div>'+
+      '<div class="v2-card" id="v2-coach"></div>'+
+      '<div class="v2-card" id="v2-install" style="display:none"><div class="v2-k">Get the app</div><div class="v2-h" style="font-size:17px">Put Lean Comp on your home screen</div>'+
+      '<p class="v2-p">Opens full-screen like any other app — no app store needed.</p><button type="button" class="v2-btn ghost" onclick="triggerInstall()">Install the app</button></div>';
+    var bar=document.querySelector('.streak-bar'); if(bar) el('v2-stats-slot').appendChild(bar);
+
+    /* Plan: the existing meal plan card, plus recipes (coming next) */
+    var mp=el('mp-card');
+    plan.innerHTML='<div class="section-label">Plan your week</div>';
+    if(mp) plan.appendChild(mp);
+    var rc=document.createElement('div'); rc.className='v2-card'; rc.style.marginTop='16px';
+    rc.innerHTML='<div class="v2-k">Recipes <span class="v2-pill soon">Coming soon</span></div><div class="v2-h">Your recipe library</div>'+
+      '<p class="v2-p">High-protein recipes with photos, prep times and servings — pick the ones you like, save your favourites, and your shopping list builds itself.</p>';
+    plan.appendChild(rc);
+
+    /* Header avatar → Profile */
+    var nav=document.querySelector('.nav');
+    if(nav && !el('v2-avatar')){ var a=document.createElement('button'); a.type='button'; a.className='v2-avatar'; a.id='v2-avatar'; a.setAttribute('aria-label','Your profile');
+      a.addEventListener('click',openProfile); nav.appendChild(a); }
+  }
+
+  /* ── navigation ── */
+  var current='home';
+  function show(tab){
+    build();
+    if(ALL.indexOf(tab)<0) tab='home';
+    current=tab;
+    ALL.forEach(function(t){ var e=el('tab-'+t); if(e) e.style.display='none'; });
+    el('tab-'+tab).style.display='block';
+    var screen=TRACK.indexOf(tab)>=0?'log':tab;
+    seg.style.display=(screen==='log')?'flex':'none';
+    document.querySelectorAll('#v2-nav button').forEach(function(b){ b.classList.toggle('on',b.dataset.go===screen); });
+    seg.querySelectorAll('button').forEach(function(b){ b.classList.toggle('on',b.dataset.go===tab); });
+    if(tab==='home') renderHome();
+    if(tab==='learn') renderLearn();
+    if(tab==='plan') openPlan();
+    if(tab==='history') renderMyHistory();
+    if(tab==='body' && window.lcnBody) lcnBody.open();
+    if(tab==='aicoach') openAICoachTab();
+    if(tab==='streaks') renderStreaks();
+    window.scrollTo(0,0);
+  }
+  /* Everything that used to call switchTab(tab, btn) keeps working. */
+  switchTab=function(tab){ show(tab); };
+  window.lcnShow=show;
+
+  document.addEventListener('click',function(ev){
+    var t=ev.target.closest('[data-go]'); if(!t) return;
+    if(!t.closest('#v2-nav,#v2-seg,#tab-home,#tab-learn,#v2-profile')) return;
+    if(t.closest('#v2-profile')) closeProfile();
+    show(t.dataset.go);
+  });
+
+  /* ── Home ── */
+  function renderHome(){
+    if(!home || !currentEmail) return;
+    var h=new Date().getHours();
+    el('v2-greet').textContent=(h<12?'Good morning':h<18?'Good afternoon':'Good evening')+(firstName()?', '+firstName():'')+' 👋';
+    el('v2-date').textContent=new Date().toLocaleDateString('en-IE',{weekday:'long',day:'numeric',month:'long'});
+
+    var wi=weekIndex(), w=WEEKS[wi%WEEKS.length], ackK='lcn_quote_ack_'+currentEmail+'_'+wi, acked=!!lsGet(ackK);
+    el('v2-quote').innerHTML='<div class="v2-k">This week’s rule</div><blockquote>“'+esc(w.q)+'”</blockquote><cite>— '+esc(QUOTE_SRC)+'</cite>'+
+      '<button type="button" class="v2-quote-ack'+(acked?' done':'')+'" id="v2-quote-ack">'+(acked?'✓ Living by it':'I’m on it')+'</button>';
+    el('v2-quote-ack').onclick=function(){ lsSet(ackK,'1'); renderHome(); };
+
+    var mine=myLogs(), t=today(), todays=mine.filter(function(l){ return String(l['Date']).slice(0,10)===t; })[0];
+    if(todays){
+      var sc=calcLogScore(todays), C=2*Math.PI*31, off=C*(1-Math.min(100,sc)/100);
+      el('v2-today').innerHTML='<div class="v2-k">Today</div><div class="v2-today"><div class="v2-ring"><svg viewBox="0 0 74 74"><circle cx="37" cy="37" r="31" stroke="#e8f5dc" stroke-width="8" fill="none"/>'+
+        '<circle cx="37" cy="37" r="31" stroke="'+scoreColour(sc)+'" stroke-width="8" fill="none" stroke-linecap="round" stroke-dasharray="'+C.toFixed(1)+'" stroke-dashoffset="'+off.toFixed(1)+'"/></svg><b>'+sc+'</b></div>'+
+        '<div><div class="v2-h">'+(sc>=90?'Brilliant day.':sc>=70?'Solid day.':'Logged — every day counts.')+'</div><p class="v2-p">Today’s score is '+sc+'/100.</p></div></div>'+
+        '<button type="button" class="v2-btn ghost" data-go="log">Update today’s log</button>';
+    }else{
+      el('v2-today').innerHTML='<div class="v2-k">Today</div><div class="v2-h">You haven’t logged today yet</div><p class="v2-p">Thirty seconds — water, sleep, steps, fruit &amp; veg, protein, alcohol and training.</p>'+
+        '<button type="button" class="v2-btn" data-go="log">Log today</button>';
+    }
+
+    var n=Math.min(wi,WEEKS.length-1), lw=WEEKS[n];
+    el('v2-lesson').innerHTML='<div class="v2-lesson-n"><small>Week</small><b>'+(n+1)+'</b></div><div><div class="v2-k" style="margin-bottom:4px">This week’s lesson '+
+      (isPro()?'<span class="v2-pill soon">Coming soon</span>':'<span class="v2-pill pro">Pro</span>')+'</div><div class="v2-h" style="font-size:17px">'+esc(lw.t)+'</div></div><div class="v2-arrow">›</div>';
+
+    var weak=(typeof lastAIAnalytics!=='undefined' && lastAIAnalytics && lastAIAnalytics.total>0)?lastAIAnalytics.weakest:null;
+    el('v2-coach').innerHTML='<div class="v2-k">Your coach</div><div class="v2-h">'+(weak?'Let’s work on '+esc(String(weak.label).toLowerCase()):'Check in with your coach')+'</div>'+
+      '<p class="v2-p">'+(weak?'It’s been your toughest habit lately ('+weak.rate+'% of target). A quick chat can find one small fix.':'A short chat about your week, built on your real logs.')+'</p>'+
+      '<button type="button" class="v2-btn ghost" data-go="aicoach">Open coach</button>';
+
+    var standalone=window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
+    el('v2-install').style.display=standalone?'none':'block';
+  }
+
+  /* ── Learn ── */
+  function renderLearn(){
+    var wi=Math.min(weekIndex(),WEEKS.length-1);
+    var head='<div class="section-label">Your 12-week programme</div>'+
+      '<div class="v2-card"><div class="v2-k">'+(isPro()?'<span class="v2-pill soon">Coming soon</span>':'<span class="v2-pill pro">Pro</span>')+'</div>'+
+      '<div class="v2-h">One core lesson a week</div><p class="v2-p">Short video lessons, the “why it matters”, practical tips and guides — one habit at a time. '+
+      (isPro()?'Your lessons are landing here very soon.':'Lessons are part of Pro.')+'</p>'+
+      (!isPro()&&STRIPE_PAYMENT_LINK?'<a class="v2-btn" target="_blank" href="'+STRIPE_PAYMENT_LINK+'?prefilled_email='+encodeURIComponent(currentEmail)+'">Upgrade to Pro</a>':'')+'</div>';
+    var list=WEEKS.map(function(w,i){ var cls=i<wi?'past':i===wi?'now':'future';
+      return '<div class="v2-week '+cls+'"><div class="n">'+(i<wi?'✓':i+1)+'</div><div><div class="t">'+esc(w.t)+(i===wi?' <span class="v2-pill free">This week</span>':'')+'</div><div class="x">Extra reading: '+esc(w.x)+'</div></div></div>'; }).join('');
+    learn.innerHTML=head+'<div class="v2-card" style="padding:4px 18px">'+list+'</div>';
+  }
+
+  /* ── Plan ── */
+  var planLoaded=false;
+  function openPlan(){
+    if(typeof renderMealPlanCard!=='function' || !el('mp-body')) return;
+    if(!planLoaded && typeof loadMealPrefs==='function'){ planLoaded=true; loadMealPrefs().then(renderMealPlanCard); }
+    else renderMealPlanCard();
+  }
+
+  /* ── Profile ── */
+  function openProfile(){ renderProfile(); el('v2-profile').hidden=false; document.body.style.overflow='hidden'; el('v2-profile').scrollTop=0; }
+  function closeProfile(){ el('v2-profile').hidden=true; document.body.style.overflow=''; }
+  el('v2-profile').addEventListener('click',function(ev){ if(ev.target.closest('[data-close]')) closeProfile(); });
+
+  function chips(list,sel,name){ return '<div class="v2-chips" data-chips="'+name+'">'+list.map(function(x){
+    return '<button type="button" class="v2-chip'+(sel.indexOf(x)>=0?' on':'')+'" data-v="'+esc(x)+'">'+esc(x)+'</button>'; }).join('')+'</div>'; }
+
+  function renderProfile(){
+    var p=getP()||blankP(), why=p.why||{}, t=p.targets, diet=p.diet||[], al=p.allergies||[];
+    var standalone=window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
+    var subLink=isPro()
+      ? (STRIPE_CUSTOMER_PORTAL_LINK?'<a class="v2-link" target="_blank" href="'+STRIPE_CUSTOMER_PORTAL_LINK+'">Manage</a>':'')
+      : (STRIPE_PAYMENT_LINK?'<a class="v2-link" target="_blank" href="'+STRIPE_PAYMENT_LINK+'?prefilled_email='+encodeURIComponent(currentEmail)+'">Upgrade</a>':'');
+    el('v2-profile-in').innerHTML=
+      '<div class="v2-me"><div class="big">'+esc(initials())+'</div><div class="nm">'+esc(currentUser)+'</div><div class="em">'+esc(currentEmail)+'</div></div>'+
+
+      '<div class="v2-card"><div class="v2-k">My goal</div><div class="v2-row" style="padding-top:0"><div class="v2-h" style="font-size:17px">'+
+        esc(GOALS[p.goal]||'Not set yet')+'</div><button type="button" class="v2-link" id="v2-redo">Change</button></div>'+
+        (t?'<div class="v2-k" style="margin-top:10px">My daily targets</div><div class="v2-tiles"><div class="v2-tile"><b>'+t.kcal+'</b><span>kcal</span></div><div class="v2-tile"><b>'+t.protein+'g</b><span>Protein</span></div>'+
+          '<div class="v2-tile"><b>'+t.carbs+'g</b><span>Carbs</span></div><div class="v2-tile"><b>'+t.fat+'g</b><span>Fat</span></div></div>'
+          :'<p class="v2-p">No calorie or protein targets yet.</p>')+
+        '<button type="button" class="v2-btn ghost" id="v2-redo2">'+(t?'Recalculate my targets':'Set my targets')+'</button>'+
+        '<p class="v2-note">Daily habit targets: 2.5L water · 8 hours’ sleep · 8–10k steps · 5 fruit &amp; veg.</p></div>'+
+
+      '<div class="v2-card"><div class="v2-k">My why</div><div class="v2-h" style="font-size:17px">The reasons behind the goal</div>'+
+        '<p class="v2-p">Write it in your own words. Your coach uses this to keep you on track when motivation dips.</p>'+
+        '<div class="v2-q">Why does this goal matter to you right now?</div><textarea class="v2-ta" id="v2-why-now" maxlength="500" placeholder="e.g. I want more energy during the day and to feel confident in my body again.">'+esc(why.now)+'</textarea>'+
+        '<div class="v2-q">How would getting healthier change things for the people you love or lead?</div><textarea class="v2-ta" id="v2-why-impact" maxlength="500" placeholder="e.g. I’d be more patient with my kids and show my team that health matters.">'+esc(why.impact)+'</textarea>'+
+        '<div class="v2-q">Finish the sentence: “I’m becoming someone who…”</div><textarea class="v2-ta" id="v2-why-identity" maxlength="300" placeholder="e.g. …looks after themselves first so they can show up for everyone else.">'+esc(why.identity)+'</textarea>'+
+        '<button type="button" class="v2-btn" id="v2-why-save">Save my why</button><div class="v2-saved" id="v2-why-msg"></div></div>'+
+
+      '<div class="v2-card"><div class="v2-k">Food</div><div class="v2-q" style="margin-top:0">Dietary preferences <span style="color:var(--muted);font-weight:600">(up to 3)</span></div>'+chips(DIETS,diet,'diet')+
+        '<div class="v2-q">Allergies</div>'+chips(ALLERGIES,al,'allergies')+
+        '<div class="v2-q">Anything else you avoid?</div><input class="v2-ta" style="min-height:0" id="v2-avoid" maxlength="200" placeholder="e.g. mushrooms, coriander" value="'+esc(p.avoidExtra||'')+'">'+
+        '<button type="button" class="v2-btn" id="v2-food-save">Save food preferences</button><div class="v2-saved" id="v2-food-msg"></div>'+
+        '<p class="v2-note">These are added to your meal plans as hard rules. Always check labels yourself, especially for allergies.</p></div>'+
+
+      '<div class="v2-card" style="padding:6px 18px">'+
+        '<div class="v2-row"><span>Membership <span class="v2-pill '+(isPro()?'pro':'free')+'">'+(isPro()?'Pro':'Free')+'</span></span>'+subLink+'</div>'+
+        '<div class="v2-row"><span>My badges &amp; streaks</span><button type="button" class="v2-link" data-go="streaks">View</button></div>'+
+        '<div class="v2-row"><span>Weekly check-in</span><button type="button" class="v2-link" id="v2-checkin">Open</button></div>'+
+        (standalone?'':'<div class="v2-row"><span>Install the app on your phone</span><button type="button" class="v2-link" onclick="triggerInstall()">Install</button></div>')+
+      '</div>'+
+      '<p class="v2-note" style="text-align:center">Your details are used only for your coaching — nothing is shared or sold. Ask your coach any time to see or delete your data.</p>';
+
+    el('v2-redo').onclick=el('v2-redo2').onclick=function(){ closeProfile(); if(window.openOnboarding) openOnboarding(); };
+    el('v2-checkin').onclick=function(){ closeProfile(); if(window.lcnCheckin) lcnCheckin.open(); };
+    el('v2-why-save').onclick=saveWhy;
+    el('v2-food-save').onclick=saveFood;
+    el('v2-profile-in').querySelectorAll('[data-chips]').forEach(function(box){
+      box.addEventListener('click',function(ev){ var b=ev.target.closest('.v2-chip'); if(!b) return;
+        if(box.dataset.chips==='diet' && !b.classList.contains('on') && box.querySelectorAll('.on').length>=3) return;
+        b.classList.toggle('on'); });
+    });
+  }
+  function picked(name){ return Array.prototype.map.call(document.querySelectorAll('[data-chips="'+name+'"] .on'),function(b){return b.dataset.v;}); }
+
+  function saveWhy(){
+    var p=getP()||blankP();
+    p.why={now:el('v2-why-now').value.trim(),impact:el('v2-why-impact').value.trim(),identity:el('v2-why-identity').value.trim()};
+    saveP(p); el('v2-why-msg').textContent='✓ Saved — your coach will use this.';
+  }
+  async function saveFood(){
+    var p=getP()||blankP();
+    p.diet=picked('diet'); p.allergies=picked('allergies'); p.avoidExtra=el('v2-avoid').value.trim();
+    saveP(p); el('v2-food-msg').textContent='✓ Saved.';
+    /* Merge into existing meal-plan preferences so plans respect them. Only
+       adds to the avoid list, never removes — dropping an allergen from a
+       hard rule should be a deliberate edit in the meal plan form. */
+    try{
+      var res=await fetchT(SCRIPT_URL+'?action=getMealPrefs&email='+encodeURIComponent(currentEmail),{},10000);
+      var base=await res.json();
+      if(!base || typeof base!=='object') return;   // no prefs yet — the form picks these up when they fill it in
+      var merged=Object.assign({},base);
+      merged.avoid=mergeAvoid(base.avoid,p);
+      if(merged.style==='Balanced'){ if(p.diet.indexOf('High protein')>=0) merged.style='High protein'; else if(p.diet.indexOf('Low carb')>=0) merged.style='Lower carb'; }
+      if(merged.avoid===base.avoid && merged.style===base.style) return;
+      await fetch(SCRIPT_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},
+        body:JSON.stringify({action:'setMealPrefs',email:currentEmail,prefs:merged})});
+      if(typeof mealPrefs!=='undefined') mealPrefs=merged;
+      el('v2-food-msg').textContent='✓ Saved — and added to your meal plan settings.';
+    }catch(e){}
+  }
+  function avoidItemsFor(p){
+    var out=[]; (p.allergies||[]).forEach(function(a){ out.push(a.toLowerCase()); });
+    (p.diet||[]).forEach(function(d){ (DIET_AVOID[d]||[]).forEach(function(x){ out.push(x); }); });
+    String(p.avoidExtra||'').split(/[,;]+/).forEach(function(x){ x=x.trim().toLowerCase(); if(x) out.push(x); });
+    return out;
+  }
+  function mergeAvoid(existing,p){
+    var items=String(existing||'').split(/[,;]+/).map(function(s){return s.trim();}).filter(Boolean);
+    var low=items.map(function(s){return s.toLowerCase();});
+    avoidItemsFor(p).forEach(function(x){ if(low.indexOf(x)<0){ items.push(x); low.push(x); } });
+    return items.join(', ');
+  }
+  /* First time filling in the meal plan form: pre-fill the avoid box. */
+  if(typeof renderMealPrefsForm==='function'){
+    var _rmpf=renderMealPrefsForm;
+    renderMealPrefsForm=function(){ _rmpf.apply(this,arguments);
+      var box=el('mpf-avoid'), p=getP(); if(box && p && !box.value.trim()) box.value=mergeAvoid('',p); };
+  }
+
+  /* ── AI coach: add their why and food rules to the coach's brief ── */
+  if(typeof window.lcnProfilePrompt==='function'){
+    var _lpp=window.lcnProfilePrompt;
+    window.lcnProfilePrompt=function(){
+      var base=_lpp.apply(this,arguments)||'', p=getP(); if(!p) return base;
+      var lines=[], w=p.why||{};
+      if(w.now) lines.push('- Why this goal matters to them right now (their words): '+w.now);
+      if(w.impact) lines.push('- How getting healthier would affect the people they love or lead: '+w.impact);
+      if(w.identity) lines.push('- Who they are becoming: "I’m becoming someone who '+w.identity.replace(/^…|^\.\.\./,'')+'"');
+      if(p.diet&&p.diet.length) lines.push('- Dietary preferences: '+p.diet.join(', '));
+      if(p.allergies&&p.allergies.length) lines.push('- Allergies (never suggest these): '+p.allergies.join(', '));
+      if(p.avoidExtra) lines.push('- Also avoids: '+p.avoidExtra);
+      if(!lines.length) return base;
+      return base+'\n\nFrom their profile:\n'+lines.join('\n')+'\nWhen motivation dips, reconnect them to their why in their own words — briefly, not every message.';
+    };
+  }
+
+  /* ── keep Home fresh when logs arrive ── */
+  if(typeof updateStreakBar==='function'){
+    var _usb=updateStreakBar;
+    updateStreakBar=function(){ _usb.apply(this,arguments); if(current==='home') renderHome(); };
+  }
+
+  /* ── switch on after login ── */
+  function enable(){
+    build(); document.body.classList.add('v2');
+    var a=el('v2-avatar'); if(a) a.textContent=initials();
+    show('home');
+  }
+  var _show=showApp;
+  showApp=function(){ _show.apply(this,arguments); enable(); };
+  if(currentEmail && app && app.style.display==='block') enable();
+})();
+</script>
+<!-- ══════════════ END APP SHELL v2 ══════════════ -->
+
 </body>
 </html>
