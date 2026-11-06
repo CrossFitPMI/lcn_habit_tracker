@@ -31,7 +31,8 @@ without you pasting files in one at a time.
 - `apps-script/*.gs` — all six files (Code, WeeklyEmail, ClientApi, Profiles,
   BodyComp, Checkins) copied verbatim from the live `lean comp tracker` project
   on 2026-11-06. The one change: the coach PIN in `ClientApi.gs` is redacted.
-- `worker/index.js` — still to copy from the Cloudflare dashboard.
+- `worker/index.js` — copied verbatim from the live `lean-comp-coach` Worker on
+  2026-11-06 (checked against a fingerprint of the deployed code).
 
 ## Secrets — do not commit
 
