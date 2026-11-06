@@ -3719,7 +3719,9 @@ async function endAISession(){
   .v2-nav-in{max-width:680px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr)}
   .v2-nav button{background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;color:var(--muted);font-family:"Nunito",sans-serif;font-size:11px;font-weight:800;letter-spacing:.3px;border-radius:12px;min-height:52px}
   .v2-nav svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .v2-nav button{position:relative}
   .v2-nav button.on{color:var(--green-dark);background:var(--green-light)}
+  .v2-nav button.on::before{content:"";position:absolute;top:-7px;left:30%;right:30%;height:3px;border-radius:0 0 3px 3px;background:var(--red)}
 
   /* Track sub-menu */
   .v2-seg{display:none;gap:6px;margin-bottom:18px;background:var(--white);border:1px solid var(--border);border-radius:14px;padding:5px}
@@ -3734,18 +3736,21 @@ async function endAISession(){
   .v2-btn{display:block;width:100%;background:var(--green);color:#fff;border:none;border-radius:12px;font-family:"Nunito",sans-serif;font-size:16px;font-weight:800;padding:13px;cursor:pointer;margin-top:14px;text-align:center;text-decoration:none}
   .v2-btn.ghost{background:none;color:var(--green-dark);border:1.5px solid var(--border)}
   .v2-pill{display:inline-block;font-size:10.5px;font-weight:900;letter-spacing:.8px;text-transform:uppercase;border-radius:20px;padding:3px 9px;vertical-align:2px}
-  .v2-pill.pro{background:var(--green-dark);color:#fff}
+  .v2-pill.pro{background:var(--red);color:#fff}
   .v2-pill.soon{background:#fff3d6;color:#8a5a00}
   .v2-pill.free{background:var(--green-light);color:var(--green-dark)}
 
   /* Home */
   .v2-greet{font-family:"Nunito",sans-serif;font-size:24px;font-weight:900;color:var(--green-dark);line-height:1.2}
+  .v2-greet span{color:var(--red)}
   .v2-date{font-size:13px;color:var(--muted);font-weight:600;margin:4px 0 16px}
   .v2-quote{background:linear-gradient(135deg,var(--green-dark),#5a9e2f);color:#fff;border:none;position:relative;overflow:hidden}
   .v2-quote .v2-k{color:rgba(255,255,255,.7)}
   .v2-quote blockquote{font-family:"Nunito",sans-serif;font-size:20px;font-weight:800;line-height:1.35}
-  .v2-quote cite{display:block;font-style:normal;font-size:12.5px;color:rgba(255,255,255,.8);margin-top:8px}
-  .v2-quote-ack{margin-top:14px;background:rgba(255,255,255,.18);color:#fff;border:1.5px solid rgba(255,255,255,.5);border-radius:20px;padding:7px 14px;font-weight:800;font-size:13px;cursor:pointer;font-family:"Nunito",sans-serif}
+  .v2-quote blockquote{border-left:4px solid var(--red);padding-left:12px}
+  .v2-quote-d{font-size:14.5px;line-height:1.55;color:rgba(255,255,255,.92);margin-top:10px}
+  .v2-quote cite{display:block;font-style:normal;font-size:11px;color:rgba(255,255,255,.6);margin-top:10px;letter-spacing:.3px}
+  .v2-quote-ack{margin-top:14px;background:var(--red);color:#fff;border:1.5px solid var(--red);border-radius:20px;padding:7px 14px;font-weight:800;font-size:13px;cursor:pointer;font-family:"Nunito",sans-serif}
   .v2-quote-ack.done{background:#fff;color:var(--green-dark);border-color:#fff}
   .v2-today{display:flex;align-items:center;gap:16px}
   .v2-ring{width:74px;height:74px;flex-shrink:0;position:relative}
@@ -3753,7 +3758,7 @@ async function endAISession(){
   .v2-ring b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:"Nunito",sans-serif;font-size:20px;font-weight:900;color:var(--green-dark)}
   body.v2 #tab-home .streak-bar{border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:14px}
   .v2-lesson{display:flex;gap:14px;align-items:center;cursor:pointer}
-  .v2-lesson-n{width:54px;height:54px;border-radius:14px;background:var(--green-light);color:var(--green-dark);display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:"Nunito",sans-serif;flex-shrink:0}
+  .v2-lesson-n{width:54px;height:54px;border-radius:14px;background:#fdeeea;color:var(--red);display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:"Nunito",sans-serif;flex-shrink:0}
   .v2-lesson-n small{font-size:9.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase}
   .v2-lesson-n b{font-size:22px;font-weight:900;line-height:1}
   .v2-arrow{margin-left:auto;color:var(--muted);font-size:20px}
@@ -3762,8 +3767,9 @@ async function endAISession(){
   .v2-week{display:flex;gap:12px;align-items:center;padding:13px 0;border-bottom:1px solid var(--border)}
   .v2-week:last-child{border-bottom:none}
   .v2-week .n{width:36px;height:36px;border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:"Nunito",sans-serif;font-weight:900;color:var(--muted);flex-shrink:0}
-  .v2-week.now .n{background:var(--green);border-color:var(--green);color:#fff}
-  .v2-week.past .n{border-color:var(--green);color:var(--green-dark)}
+  .v2-week.now .n{background:var(--red);border-color:var(--red);color:#fff}
+  .v2-week.past .n{background:var(--green);border-color:var(--green);color:#fff}
+  .v2-pill.now{background:#fdeeea;color:var(--red)}
   .v2-week .t{font-weight:700;font-size:15px}
   .v2-week .x{font-size:12px;color:var(--muted);margin-top:2px}
   .v2-week.future{opacity:.55}
@@ -3818,20 +3824,32 @@ async function endAISession(){
   /* ── Content: the 12-week programme and its weekly quotes ──
      Quotes are short lines from Jon Goodman's "55 Rules for Humans" (PTDC),
      always credited. Permission to use them in the app is being requested. */
-  var QUOTE_SRC='Jon Goodman, 55 Rules for Humans';
+  var QUOTE_SRC='Rule: Jon Goodman';
   var WEEKS=[
-    {t:'The Why',                     x:'Why you’re not losing fat',                            q:'The best investment you can make is in your own health.'},
-    {t:'Habit 1: Water',              x:'Water guide',                                         q:'Bring a water bottle.'},
-    {t:'Habit 2: Sleep',              x:'Sleep resources',                                     q:'Sunlight before screen light.'},
-    {t:'Habit 3: The Plate Method',   x:'Plate Method guide',                                  q:'Make your bed. Begin your day with a positive action.'},
-    {t:'Portion Control',             x:'The weekly shop',                                     q:'Don’t restrict yourself. Enjoy it, just don’t mindlessly consume it.'},
-    {t:'The Golden Rule',             x:'How calories work',                                   q:'Don’t drink your calories.'},
-    {t:'Reading Nutrition Labels',    x:'Macronutrients',                                      q:'Work, or do nothing.'},
-    {t:'Food Swaps',                  x:'Tracking calories, training vs rest days, banking',   q:'Order the first thing.'},
-    {t:'The Big Clear Out',           x:'Processed foods',                                     q:'No candy in the cupboard.'},
-    {t:'Dealing With Cravings',       x:'Eating out',                                          q:'Count to ten.'},
-    {t:'Alcohol',                     x:'Supplements & vitamins',                              q:'Show up or don’t.'},
-    {t:'Overcoming Plateaus',         x:'Non-scale victories',                                 q:'Leave two reps in the hole.'}
+    {t:'The Why',                     x:'Why you’re not losing fat',                            q:'The best investment you can make is in your own health.',
+     d:'Your body is the one thing you can’t replace. Time and money spent looking after it now pays you back in energy, mood and years — cut costs somewhere else.'},
+    {t:'Habit 1: Water',              x:'Water guide',                                         q:'Bring a water bottle.',
+     d:'Hydration is mostly planning. Keep a bottle with you — desk, car, gym bag — and you’ll drink without having to think about it.'},
+    {t:'Habit 2: Sleep',              x:'Sleep resources',                                     q:'Sunlight before screen light.',
+     d:'Get outside for a few minutes before you pick up your phone. Morning light sets your body clock, and that’s what helps you sleep tonight.'},
+    {t:'Habit 3: The Plate Method',   x:'Plate Method guide',                                  q:'Make your bed. Begin your day with a positive action.',
+     d:'One small win first thing is proof you’re someone who follows through — and that carries straight into your first meal of the day.'},
+    {t:'Portion Control',             x:'The weekly shop',                                     q:'Don’t restrict yourself. Enjoy it, just don’t mindlessly consume it.',
+     d:'Banning foods usually backfires. If you want a treat, have it — sit down and actually enjoy it. Just don’t eat it on autopilot.'},
+    {t:'The Golden Rule',             x:'How calories work',                                   q:'Don’t drink your calories.',
+     d:'Fizzy drinks, juices and fancy coffees add up fast and don’t fill you up. Keep them as an occasional treat, not part of every day.'},
+    {t:'Reading Nutrition Labels',    x:'Macronutrients',                                      q:'Work, or do nothing.',
+     d:'When something matters, give it your full attention or none. Ten focused minutes reading labels or planning meals beats an hour half-distracted.'},
+    {t:'Food Swaps',                  x:'Tracking calories, training vs rest days, banking',   q:'Order the first thing.',
+     d:'Don’t agonise over the menu. Pick the first good option that fits your plate, close the menu and enjoy the company.'},
+    {t:'The Big Clear Out',           x:'Processed foods',                                     q:'No candy in the cupboard.',
+     d:'If it’s in the house, you’ll eat it. Most snacking is boredom or tiredness, not hunger — so make treats something you have to go out for.'},
+    {t:'Dealing With Cravings',       x:'Eating out',                                          q:'Count to ten.',
+     d:'Cravings peak and pass. Pause, have a glass of water, count to ten — then decide. Very little feels as urgent a minute later.'},
+    {t:'Alcohol',                     x:'Supplements & vitamins',                              q:'Show up or don’t.',
+     d:'Decide what you’re serious about right now. If cutting back on drink matters to you, commit to it fully — half-measures are the hardest way to do it.'},
+    {t:'Overcoming Plateaus',         x:'Non-scale victories',                                 q:'Leave two reps in the hole.',
+     d:'Progress comes from turning up again tomorrow. Don’t go all-out and burn out — keep a little in the tank and stay consistent.'}
   ];
   var DIETS=['Vegetarian','Vegan','Pescatarian','Gluten-free','Dairy-free','Nut-free','Low carb','High protein'];
   var ALLERGIES=['Dairy','Egg','Fish','Shellfish','Peanuts','Tree nuts','Soy','Gluten','Sesame'];
@@ -3946,11 +3964,11 @@ async function endAISession(){
   function renderHome(){
     if(!home || !currentEmail) return;
     var h=new Date().getHours();
-    el('v2-greet').textContent=(h<12?'Good morning':h<18?'Good afternoon':'Good evening')+(firstName()?', '+firstName():'')+' 👋';
+    el('v2-greet').innerHTML=(h<12?'Good morning':h<18?'Good afternoon':'Good evening')+(firstName()?', <span>'+esc(firstName())+'</span>':'')+' 👋';
     el('v2-date').textContent=new Date().toLocaleDateString('en-IE',{weekday:'long',day:'numeric',month:'long'});
 
     var wi=weekIndex(), w=WEEKS[wi%WEEKS.length], ackK='lcn_quote_ack_'+currentEmail+'_'+wi, acked=!!lsGet(ackK);
-    el('v2-quote').innerHTML='<div class="v2-k">This week’s rule</div><blockquote>“'+esc(w.q)+'”</blockquote><cite>— '+esc(QUOTE_SRC)+'</cite>'+
+    el('v2-quote').innerHTML='<div class="v2-k">This week’s rule</div><blockquote>“'+esc(w.q)+'”</blockquote><p class="v2-quote-d">'+esc(w.d)+'</p><cite>'+esc(QUOTE_SRC)+'</cite>'+
       '<button type="button" class="v2-quote-ack'+(acked?' done':'')+'" id="v2-quote-ack">'+(acked?'✓ Living by it':'I’m on it')+'</button>';
     el('v2-quote-ack').onclick=function(){ lsSet(ackK,'1'); renderHome(); };
 
@@ -3988,7 +4006,7 @@ async function endAISession(){
       (isPro()?'Your lessons are landing here very soon.':'Lessons are part of Pro.')+'</p>'+
       (!isPro()&&STRIPE_PAYMENT_LINK?'<a class="v2-btn" target="_blank" href="'+STRIPE_PAYMENT_LINK+'?prefilled_email='+encodeURIComponent(currentEmail)+'">Upgrade to Pro</a>':'')+'</div>';
     var list=WEEKS.map(function(w,i){ var cls=i<wi?'past':i===wi?'now':'future';
-      return '<div class="v2-week '+cls+'"><div class="n">'+(i<wi?'✓':i+1)+'</div><div><div class="t">'+esc(w.t)+(i===wi?' <span class="v2-pill free">This week</span>':'')+'</div><div class="x">Extra reading: '+esc(w.x)+'</div></div></div>'; }).join('');
+      return '<div class="v2-week '+cls+'"><div class="n">'+(i<wi?'✓':i+1)+'</div><div><div class="t">'+esc(w.t)+(i===wi?' <span class="v2-pill now">This week</span>':'')+'</div><div class="x">Extra reading: '+esc(w.x)+'</div></div></div>'; }).join('');
     learn.innerHTML=head+'<div class="v2-card" style="padding:4px 18px">'+list+'</div>';
   }
 
