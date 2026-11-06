@@ -26,13 +26,12 @@ Script keeps a version list, but neither shows you *what changed between them*.
 A copy in git gives you that, and gives a fresh conversation something to read
 without you pasting files in one at a time.
 
-## Still missing
+## Status
 
-- `apps-script/Code.gs` — paste your current `Code.gs` in and commit it
-- `worker/index.js` — paste the Worker source in and commit it
-
-I've left both out deliberately rather than committing a version I can't verify
-is current. Copy them from the live editors.
+- `apps-script/*.gs` — all six files (Code, WeeklyEmail, ClientApi, Profiles,
+  BodyComp, Checkins) copied verbatim from the live `lean comp tracker` project
+  on 2026-11-06. The one change: the coach PIN in `ClientApi.gs` is redacted.
+- `worker/index.js` — still to copy from the Cloudflare dashboard.
 
 ## Secrets — do not commit
 
