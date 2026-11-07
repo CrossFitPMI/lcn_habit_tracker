@@ -4083,12 +4083,14 @@ async function endAISession(){
         '<div class="v2-row"><span>My favourite recipes</span><button type="button" class="v2-link" id="v2-favs">View</button></div>'+
         '<div class="v2-row"><span>My badges &amp; streaks</span><button type="button" class="v2-link" data-go="streaks">View</button></div>'+
         '<div class="v2-row"><span>Weekly check-in</span><button type="button" class="v2-link" id="v2-checkin">Open</button></div>'+
+        '<div class="v2-row"><span>App tour</span><button type="button" class="v2-link" id="v2-tour">Replay</button></div>'+
         (standalone?'':'<div class="v2-row"><span>Install the app on your phone</span><button type="button" class="v2-link" onclick="triggerInstall()">Install</button></div>')+
       '</div>'+
       '<p class="v2-note" style="text-align:center">Your details are used only for your coaching — nothing is shared or sold. Ask your coach any time to see or delete your data.</p>';
 
     el('v2-redo').onclick=el('v2-redo2').onclick=function(){ closeProfile(); if(window.openOnboarding) openOnboarding(); };
     el('v2-favs').onclick=function(){ closeProfile(); show('plan'); if(window.lcnRecipes) lcnRecipes.showFavs(); };
+    el('v2-tour').onclick=function(){ closeProfile(); if(window.lcnTour) lcnTour.start(); };
     el('v2-checkin').onclick=function(){ closeProfile(); if(window.lcnCheckin) lcnCheckin.open(); };
     el('v2-why-save').onclick=saveWhy;
     el('v2-food-save').onclick=saveFood;
@@ -4719,5 +4721,131 @@ async function endAISession(){
 })();
 </script>
 <!-- ══════════════ END CHALLENGES v1 ══════════════ -->
+<!-- ══════════════ TOUR v1 ══════════════
+     A short first-run walkthrough of the bottom menu and profile. Shows once
+     per person (flag kept in the profile JSON as tourAt, so it syncs across
+     phones), waits until the first-run setup is closed, and can be replayed
+     from Profile → App tour. -->
+<style>
+  .tr-wrap{position:fixed;inset:0;z-index:600}
+  .tr-wrap[hidden]{display:none}
+  .tr-shade{position:fixed;inset:0;background:rgba(18,32,10,.62)}
+  .tr-hole{position:fixed;border-radius:14px;box-shadow:0 0 0 9999px rgba(18,32,10,.62),0 0 0 3px var(--red);transition:all .28s ease;pointer-events:none}
+  .tr-card{position:fixed;left:16px;right:16px;max-width:420px;margin:0 auto;background:#fff;border-radius:18px;padding:18px 18px 14px;box-shadow:0 12px 40px rgba(0,0,0,.28);transition:top .28s ease,bottom .28s ease}
+  .tr-card.center{top:50%;transform:translateY(-50%)}
+  .tr-k{font-size:11px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--red)}
+  .tr-h{font-family:"Nunito",sans-serif;font-size:20px;font-weight:900;color:var(--green-dark);line-height:1.2;margin-top:3px}
+  .tr-p{font-size:15px;line-height:1.55;color:var(--text);margin-top:8px}
+  .tr-foot{display:flex;align-items:center;justify-content:space-between;margin-top:14px;gap:10px}
+  .tr-dots{display:flex;gap:5px}
+  .tr-dots i{width:7px;height:7px;border-radius:50%;background:var(--border)}
+  .tr-dots i.on{background:var(--green);width:18px;border-radius:4px}
+  .tr-btns{display:flex;gap:8px;align-items:center}
+  .tr-skip{background:none;border:none;color:var(--muted);font:700 14px "DM Sans",sans-serif;cursor:pointer;padding:8px 4px}
+  .tr-next{background:var(--green);color:#fff;border:none;border-radius:12px;padding:11px 18px;font:800 15px "Nunito",sans-serif;cursor:pointer}
+  .tr-next.red{background:var(--red)}
+  .tr-emoji{font-size:34px;line-height:1}
+</style>
+
+<div class="tr-wrap" id="tr-wrap" hidden role="dialog" aria-modal="true" aria-label="App tour">
+  <div class="tr-shade" id="tr-shade"></div>
+  <div class="tr-hole" id="tr-hole" hidden></div>
+  <div class="tr-card" id="tr-card"></div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  if(!window.lcnProfile) return;
+  var el=function(id){return document.getElementById(id);};
+  var nav=function(go){ return document.querySelector('#v2-nav button[data-go="'+go+'"]'); };
+  function standalone(){ return window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true; }
+  function first(){ return String(currentUser||'').trim().split(/\s+/)[0]||''; }
+
+  function steps(){
+    var pro=lcnProfile.isPro();
+    var s=[
+      {center:true, emoji:'👋', k:'Welcome', h:'Welcome'+(first()?', '+first():'')+'!', p:'Here’s a quick look around your app. It takes about 30 seconds.', next:'Show me'},
+      {t:function(){return nav('home');}, k:'Home', h:'Your day at a glance', p:'Your weekly win, today’s check-in and your challenge, all on one screen.'},
+      {t:function(){return nav('log');}, k:'Track', h:'Log your day in 30 seconds', p:'Water, sleep, steps, fruit & veg, protein, alcohol and training. Your History, Body measurements, Streaks and Challenges are in here too.'},
+      {t:function(){return nav('plan');}, k:'Plan', h:'Recipes, meal plans & shopping', p:(pro?'137 high-protein recipes':'High-protein recipes')+', meal plans built around your targets, and a shopping list that fills itself.'},
+      {t:function(){return nav('aicoach');}, k:'Coach', h:'Your coach, any time', p:'Ask anything — what to eat out, how to get back on track, how your week went. It knows your goal, your why and your logs.'},
+      {t:function(){return nav('learn');}, k:'Learn', h:'The Fat Loss Blueprint', p:'Our 12-week nutrition course — one lesson a week to make the changes stick.'},
+      {t:function(){return el('v2-avatar');}, k:'Your profile', h:'Tap your initials', p:'Your goal and targets, food preferences, favourite recipes — and your why. Fill that in: your coach uses it to keep you going when motivation dips.'}
+    ];
+    if(!standalone()) s.push({center:true, emoji:'📲', k:'One last thing', h:'Put it on your home screen', p:'It opens full-screen like any other app — no app store needed.', install:true});
+    s[s.length-1].last=true;
+    return s;
+  }
+
+  var S=[], i=0;
+  function render(){
+    var st=S[i], card=el('tr-card'), hole=el('tr-hole'), tgt=st.t&&st.t();
+    card.className='tr-card'; card.style.top=card.style.bottom='';
+    if(st.center||!tgt){ hole.hidden=true; el('tr-shade').style.display='block'; card.classList.add('center'); }
+    else{
+      var r=tgt.getBoundingClientRect(), pad=4;
+      el('tr-shade').style.display='none'; hole.hidden=false;
+      hole.style.left=(r.left-pad)+'px'; hole.style.top=(r.top-pad)+'px'; hole.style.width=(r.width+pad*2)+'px'; hole.style.height=(r.height+pad*2)+'px';
+      var vh=window.innerHeight;
+      if(r.top>vh/2) card.style.bottom=(vh-r.top+18)+'px'; else card.style.top=(r.bottom+18)+'px';
+    }
+    var dots=S.map(function(_,j){return '<i class="'+(j===i?'on':'')+'"></i>';}).join('');
+    card.innerHTML=(st.emoji?'<div class="tr-emoji">'+st.emoji+'</div>':'')+
+      '<div class="tr-k"'+(st.emoji?' style="margin-top:8px"':'')+'>'+st.k+'</div><div class="tr-h">'+st.h+'</div><div class="tr-p">'+st.p+'</div>'+
+      '<div class="tr-foot"><div class="tr-dots">'+dots+'</div><div class="tr-btns">'+
+        (st.last?'':'<button type="button" class="tr-skip" data-tr="skip">Skip</button>')+
+        (st.install?'<button type="button" class="tr-skip" data-tr="done">Later</button><button type="button" class="tr-next red" data-tr="install">Install</button>'
+          :'<button type="button" class="tr-next'+(i===0?' red':'')+'" data-tr="'+(st.last?'done':'next')+'">'+(st.last?'Let’s go':(st.next||'Next'))+'</button>')+
+      '</div></div>';
+  }
+  function start(){
+    if(!currentEmail || !document.body.classList.contains('v2')) return;
+    if(window.lcnShow) lcnShow('home');
+    S=steps(); i=0; el('tr-wrap').hidden=false; render();
+  }
+  function end(){
+    el('tr-wrap').hidden=true;
+    var p=lcnProfile.get()||lcnProfile.blank();
+    if(!p.tourAt){ p.tourAt=new Date().toISOString(); lcnProfile.save(p); }
+    try{ localStorage.setItem('lcn_tour_'+currentEmail,'1'); }catch(e){}
+  }
+  el('tr-card').addEventListener('click',function(ev){
+    var b=ev.target.closest('[data-tr]'); if(!b) return;
+    var a=b.dataset.tr;
+    if(a==='next'){ i=Math.min(i+1,S.length-1); render(); }
+    else if(a==='install'){ end(); if(typeof triggerInstall==='function') triggerInstall(); }
+    else end();
+  });
+  window.addEventListener('resize',function(){ if(!el('tr-wrap').hidden) render(); });
+
+  /* Show once, after the first-run setup is out of the way and nothing else is open. */
+  function seen(){
+    var p=lcnProfile.get();
+    if(p&&p.tourAt) return true;
+    try{ return !!localStorage.getItem('lcn_tour_'+currentEmail); }catch(e){ return false; }
+  }
+  function busy(){
+    var p=lcnProfile.get();
+    if(!p || (!p.completedAt && !p.skippedAt)) return true;   // first-run setup still to come
+    return ['onb','v2-profile','rc-page','ch-page'].some(function(id){ var e=el(id); return e && !e.hidden; });
+  }
+  var waitTimer=null, tries=0;
+  function maybe(){
+    clearTimeout(waitTimer);
+    if(!currentEmail || seen() || !el('tr-wrap').hidden) return;
+    if(busy() || !document.body.classList.contains('v2')){ if(++tries<600) waitTimer=setTimeout(maybe,1500); return; }
+    start();
+  }
+  if(typeof showApp==='function'){
+    var _sa=showApp;
+    showApp=function(){ _sa.apply(this,arguments); tries=0; waitTimer=setTimeout(maybe,1800); };
+  }
+  if(currentEmail && document.body.classList.contains('v2')) waitTimer=setTimeout(maybe,1800);
+
+  window.lcnTour={start:start};
+})();
+</script>
+<!-- ══════════════ END TOUR v1 ══════════════ -->
 </body>
 </html>
