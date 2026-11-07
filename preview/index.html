@@ -4180,12 +4180,11 @@ async function endAISession(){
 </script>
 <!-- ══════════════ END APP SHELL v2 ══════════════ -->
 <!-- ══════════════ RECIPES v1: library, recipe page, favourites, shopping list ══════════════
-     Recipes come from recipes/recipes.json (92 recipes from the High Protein
-     guides, Veggie Sides and Smoothies packs; photos in recipes/img/).
+     Recipes come from recipes/recipes.json (137 recipes: the High Protein guides,
+     Veggie Sides, Smoothies and the Nov/Dec/Jan monthly packs; photos in recipes/img/).
      Plan becomes three views: Recipes | Meal plan (the existing AI plan) |
      Shopping list. Favourites live in the profile JSON (syncs via setProfile);
-     the shopping list is kept on the device. Recipes are Pro, with a handful
-     free to try. -->
+     the shopping list is kept on the device. Recipes are Pro, with ten free to try. -->
 <style>
   .rc-seg{display:flex;gap:6px;margin-bottom:16px;background:var(--white);border:1px solid var(--border);border-radius:14px;padding:5px}
   .rc-seg button{flex:1;background:none;border:none;border-radius:10px;padding:10px 4px;font-family:"Nunito",sans-serif;font-size:13px;font-weight:800;color:var(--muted);cursor:pointer;position:relative}
@@ -4284,8 +4283,8 @@ async function endAISession(){
   var CATS=['All','Breakfast','Lunch & Dinner','Snacks & Treats','Smoothies','Sides'];
   var TAGN={GF:'Gluten free',DF:'Dairy free',LC:'Low carb',MP:'Meal prep friendly',HP:'High protein',V:'Vegetarian',Q:'Quick',N:'Contains nuts'};
   var FILTERS=[['Q','Quick'],['V','Vegetarian'],['GF','Gluten free'],['DF','Dairy free'],['MP','Meal prep']];
-  /* A few to try on the free plan — one from most sections. */
-  var FREE=['spanish-zucchini-tortilla','tuna-salad-lettuce-wraps','turkey-broccoli-stir-fry','one-minute-protein-mug-cake','green-glow-protein-smoothie','citrusy-infused-steamed-greens'];
+  /* Ten to try on the free plan, spread across the sections. */
+  var FREE=['spanish-zucchini-tortilla','high-protein-blueberry-pancakes','berry-cottage-cheese-bowl','tuna-salad-lettuce-wraps','turkey-broccoli-stir-fry','simple-chicken-curry-with-saffron-rice','lemon-herb-salmon-pasta','one-minute-protein-mug-cake','green-glow-protein-smoothie','citrusy-infused-steamed-greens'];
 
   var R=null, loading=null, view='recipes', cat='All', tag=null, favOnly=false, q='';
   var built=false;
@@ -4303,7 +4302,7 @@ async function endAISession(){
   function shopKey(){ return 'lcn_shop_'+currentEmail; }
   function getShop(){ try{ return JSON.parse(localStorage.getItem(shopKey()))||[]; }catch(e){ return []; } }
   function setShop(list){ try{ localStorage.setItem(shopKey(),JSON.stringify(list)); }catch(e){} updateBadge(); }
-  function mins(r){ var n=0; [r.prep,r.cook].forEach(function(v){ var m=String(v||'').match(/(\d+(?:\.\d+)?)\s*(hr|min)?/i); if(m) n+=m[2]&&/hr/i.test(m[2])?parseFloat(m[1])*60:parseFloat(m[1]); }); return Math.round(n); }
+  function mins(r){ var n=0; (r.tot?[r.tot]:[r.prep,r.cook]).forEach(function(v){ String(v||'').replace(/(\d+(?:\.\d+)?)\s*(hrs?|hours?|mins?|minutes?)?/gi,function(_,x,u){ n+=u&&/^h/i.test(u)?parseFloat(x)*60:parseFloat(x); return ''; }); }); return Math.round(n); }
   function timeLabel(r){ var m=mins(r); if(r.chill && /overnight/i.test(r.chill)) return 'Overnight'; return m? (m>=60? (Math.floor(m/60)+'h'+(m%60? ' '+(m%60)+'m':'')) : m+' min') : ''; }
 
   function load(){
@@ -4343,7 +4342,7 @@ async function endAISession(){
     var box=el('rc-v-recipes');
     if(!box.dataset.ready){
       box.dataset.ready='1';
-      box.innerHTML=(pro()?'':'<div class="rc-up"><b>92 high-protein recipes</b><p>Try the free ones on us. Pro unlocks the full library, favourites and your weekly meal plan.</p>'+
+      box.innerHTML=(pro()?'':'<div class="rc-up"><b>Over 130 high-protein recipes</b><p>Try the free ones on us. Pro unlocks the full library, favourites and your weekly meal plan.</p>'+
           (STRIPE_PAYMENT_LINK?'<a target="_blank" rel="noopener" href="'+STRIPE_PAYMENT_LINK+'?prefilled_email='+encodeURIComponent(currentEmail)+'">Upgrade to Pro</a>':'')+'</div>')+
         '<input class="rc-search" id="rc-q" type="search" placeholder="Search recipes or ingredients…" autocomplete="off">'+
         '<div class="rc-chips" id="rc-cats">'+CATS.map(function(c){return '<button type="button" class="rc-chip" data-cat="'+esc(c)+'">'+esc(c)+'</button>';}).join('')+
@@ -4402,7 +4401,9 @@ async function endAISession(){
         (pro()?'<button type="button" class="rc-heart'+(fav?' on':'')+'" data-rc-fav aria-label="Favourite">'+(fav?'♥':'♡')+'</button>':'')+'</div>'+
       '<div class="rc-in"><div class="rc-cat">'+esc(r.c)+'</div><h1 class="rc-h1">'+esc(r.t)+'</h1>'+
         '<div class="rc-tags">'+r.tags.map(function(t){return TAGN[t]?'<span class="rc-tag">'+TAGN[t]+'</span>':'';}).join('')+'</div>'+
-        '<div class="rc-stats"><div class="rc-stat"><b>'+esc(r.prep||'—')+'</b><span>Prep</span></div><div class="rc-stat"><b>'+esc(r.chill&&!r.cook?r.chill:(r.cook||'None'))+'</b><span>'+(r.chill&&!r.cook?'Chill':'Cook')+'</span></div><div class="rc-stat"><b>'+esc((r.s||'').replace(/^Serves\s*/,'')||'—')+'</b><span>Serves</span></div></div>'+
+        '<div class="rc-stats" style="grid-template-columns:repeat('+(r.tot?2:3)+',1fr)">'+(r.tot?'<div class="rc-stat"><b>'+esc(r.tot)+'</b><span>Total time</span></div>':
+          '<div class="rc-stat"><b>'+esc(r.prep||'—')+'</b><span>Prep</span></div><div class="rc-stat"><b>'+esc(r.chill&&!r.cook?r.chill:(r.cook||'None'))+'</b><span>'+(r.chill&&!r.cook?'Chill':'Cook')+'</span></div>')+
+          '<div class="rc-stat"><b>'+esc((r.s||'').replace(/^(Serves|Makes)\s*/,'')||'—')+'</b><span>Serves</span></div></div>'+
         '<div class="rc-macros">'+(r.p!=null?'<div class="rc-pro"><b>'+r.p+'g</b><span>protein</span></div>':'')+
           (mini.length?'<div class="rc-mini" style="grid-template-columns:repeat('+mini.length+',1fr)">'+mini.map(function(m){return '<div><b>'+m[1]+'</b><span>'+m[0]+'</span></div>';}).join('')+'</div>':'')+'</div>'+
         '<div class="rc-note">Per serving.'+(r.chill&&r.cook?' Plus '+esc(r.chill)+' chilling.':'')+'</div>'+
@@ -4431,7 +4432,7 @@ async function endAISession(){
     var page=el('rc-page');
     page.innerHTML='<div class="rc-hero"><img src="'+r.img+'" alt=""><button type="button" class="rc-x" data-rc-close aria-label="Back">‹</button></div>'+
       '<div class="rc-in"><div class="rc-cat">'+esc(r.c)+'</div><h1 class="rc-h1">'+esc(r.t)+'</h1>'+
-      '<p class="v2-p" style="margin-top:10px">This recipe is part of <b>Pro</b> — along with all 92 high-protein recipes, favourites, and a weekly meal plan with a shopping list built around you.</p>'+
+      '<p class="v2-p" style="margin-top:10px">This recipe is part of <b>Pro</b> — along with the full library of over 130 high-protein recipes, favourites, and a weekly meal plan with a shopping list built around you.</p>'+
       (STRIPE_PAYMENT_LINK?'<a class="v2-btn red" target="_blank" rel="noopener" href="'+STRIPE_PAYMENT_LINK+'?prefilled_email='+encodeURIComponent(currentEmail)+'">Upgrade to Pro</a>':'')+
       '<button type="button" class="v2-btn ghost" data-rc-close>Back to recipes</button></div>';
     page.hidden=false; page.scrollTop=0; document.body.style.overflow='hidden';
