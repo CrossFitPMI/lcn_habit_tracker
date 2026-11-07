@@ -3777,6 +3777,7 @@ async function endAISession(){
   .v2-price{font-family:"Nunito",sans-serif;font-size:30px;font-weight:900;color:var(--green-dark);margin-top:12px}
   .v2-price span{font-size:13px;font-weight:700;color:var(--muted);margin-left:4px}
   .v2-btn.red{background:var(--red)}
+  .v2-btn.soon{opacity:.85;cursor:default;letter-spacing:.5px}
   .v2-ticks{list-style:none;padding:0;margin:0}
   .v2-ticks li{position:relative;padding:7px 0 7px 28px;font-size:14.5px;line-height:1.45}
   .v2-ticks li::before{content:"✓";position:absolute;left:0;top:6px;width:20px;height:20px;border-radius:50%;background:var(--green);color:#fff;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center}
@@ -3996,10 +3997,15 @@ async function endAISession(){
   /* ── Learn: advert for the 12-Week Fat Loss Blueprint (a separate, one-time
      purchase on the course platform — not part of app Pro). ── */
   var COURSE_URL='https://7jmjf220flyfe3xs9tf0.app.clientclub.net/courses/offers/bc97d8d3-5a09-4912-934a-2919287fd200';
+  /* Flip to true when the course is ready to sell: the buttons become live checkout links. */
+  var COURSE_LIVE=false;
   var COURSE_PORTAL='https://7jmjf220flyfe3xs9tf0.app.clientclub.net/';
   function renderLearn(){
     if(learn.dataset.built) return;
     learn.dataset.built='1';
+    var buy=function(label,extra){ return COURSE_LIVE
+      ? '<a class="v2-btn red" '+(extra||'')+' href="'+COURSE_URL+'" target="_blank" rel="noopener">'+label+'</a>'
+      : '<div class="v2-btn red soon" '+(extra||'')+' aria-disabled="true">Coming soon</div>'; };
     var weeks=WEEKS.map(function(w,i){
       return '<div class="v2-week"><div class="n">'+(i+1)+'</div><div><div class="t">'+esc(w.t)+'</div><div class="x">Plus: '+esc(w.x)+'</div></div></div>'; }).join('');
     learn.innerHTML=
@@ -4009,7 +4015,7 @@ async function endAISession(){
         '<div class="v2-h" style="font-size:22px">12-Week Fat Loss Blueprint</div>'+
         '<p class="v2-p">Finally connect the effort you put in at the gym with the results in the mirror. One short video lesson a week, one habit at a time — no crash diets, no tracking everything.</p>'+
         '<div class="v2-price">€50 <span>once, yours for life</span></div>'+
-        '<a class="v2-btn red" href="'+COURSE_URL+'" target="_blank" rel="noopener">Get the course</a>'+
+        buy('Get the course')+
         '<a class="v2-btn ghost" href="'+COURSE_PORTAL+'" target="_blank" rel="noopener">Already have it? Open the course</a>'+
       '</div>'+
       '<div class="v2-card"><div class="v2-k">What you get</div><ul class="v2-ticks">'+
@@ -4021,7 +4027,7 @@ async function endAISession(){
         '<li>A supportive community and weekly Q&amp;A coaching</li>'+
       '</ul></div>'+
       '<div class="v2-card" style="padding:4px 18px"><div class="v2-k" style="margin:14px 0 2px">Week by week</div>'+weeks+'</div>'+
-      '<a class="v2-btn red" style="margin-bottom:14px" href="'+COURSE_URL+'" target="_blank" rel="noopener">Get the 12-Week Fat Loss Blueprint — €50</a>';
+      buy('Get the 12-Week Fat Loss Blueprint — €50','style="margin-bottom:14px"');
   }
 
   /* ── Plan ── */
