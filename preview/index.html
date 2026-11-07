@@ -3950,7 +3950,10 @@ async function endAISession(){
   /* Everything that used to call switchTab(tab, btn) keeps working. */
   switchTab=function(tab){ show(tab); };
   window.lcnShow=show;
-  window.lcnProfile={get:getP,blank:blankP,save:saveP,isPro:isPro};
+  /* Older code (body comp's goal lookup) calls lcnProfile() as a function, so keep it callable. */
+  var lp=function(){ return currentEmail?getP():null; };
+  lp.get=getP; lp.blank=blankP; lp.save=saveP; lp.isPro=isPro;
+  window.lcnProfile=lp;
 
   document.addEventListener('click',function(ev){
     var t=ev.target.closest('[data-go]'); if(!t) return;

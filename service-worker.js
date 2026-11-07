@@ -1,6 +1,6 @@
 // LCN Coach — service worker
 // Bump CACHE_NAME whenever you want clients to drop cached static assets.
-const CACHE_NAME = 'lcn-coach-v8';
+const CACHE_NAME = 'lcn-coach-v9';
 
 // How long to wait for a fresh index.html before giving up and using the
 // cached copy. Long enough that a normal connection always wins; short
