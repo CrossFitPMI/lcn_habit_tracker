@@ -3722,7 +3722,7 @@ async function endAISession(){
 
   /* Track sub-menu */
   .v2-seg{display:none;gap:6px;margin-bottom:18px;background:var(--white);border:1px solid var(--border);border-radius:14px;padding:5px}
-  .v2-seg button{flex:1;background:none;border:none;border-radius:10px;padding:10px 4px;font-family:"Nunito",sans-serif;font-size:13px;font-weight:800;color:var(--muted);cursor:pointer}
+  .v2-seg button{flex:1;background:none;border:none;border-radius:10px;padding:10px 2px;font-family:"Nunito",sans-serif;font-size:12px;font-weight:800;color:var(--muted);cursor:pointer}
   .v2-seg button.on{background:var(--green);color:#fff}
 
   /* shared cards */
@@ -3853,8 +3853,8 @@ async function endAISession(){
   var DIET_AVOID={'Vegetarian':['meat','poultry','fish','shellfish'],'Vegan':['meat','poultry','fish','shellfish','dairy','eggs','honey'],
     'Pescatarian':['meat','poultry'],'Gluten-free':['gluten'],'Dairy-free':['dairy'],'Nut-free':['peanuts','tree nuts']};
   var GOALS={lose:'Lose fat',maintain:'Maintain & feel better',gain:'Build muscle',energy:'More energy'};
-  var TRACK=['log','history','body','streaks'];
-  var ALL=['home','learn','plan','log','history','body','streaks','aicoach'];
+  var TRACK=['log','history','body','streaks','challenges'];
+  var ALL=['home','learn','plan','log','history','body','streaks','challenges','aicoach'];
 
   /* ── profile helpers (same storage + endpoint as the first-run setup) ── */
   function pKey(){ return 'lcn_profile_'+currentEmail; }
@@ -3892,16 +3892,18 @@ async function endAISession(){
     learn=document.createElement('div'); learn.id='tab-learn'; learn.style.display='none';
     plan=document.createElement('div'); plan.id='tab-plan'; plan.style.display='none';
     seg=document.createElement('div'); seg.className='v2-seg'; seg.id='v2-seg';
-    seg.innerHTML='<button type="button" data-go="log">Log</button><button type="button" data-go="history">History</button><button type="button" data-go="body">Body</button><button type="button" data-go="streaks">Streaks</button>';
+    seg.innerHTML='<button type="button" data-go="log">Log</button><button type="button" data-go="history">History</button><button type="button" data-go="body">Body</button><button type="button" data-go="streaks">Streaks</button><button type="button" data-go="challenges">Challenges</button>';
     var first=el('tab-log');
     app.insertBefore(home,app.firstChild);
     app.insertBefore(seg,first);
-    app.appendChild(learn); app.appendChild(plan);
+    var chal=document.createElement('div'); chal.id='tab-challenges'; chal.style.display='none';
+    app.appendChild(learn); app.appendChild(plan); app.appendChild(chal);
 
     /* Home: greeting, quote, today, stats (the existing streak bar), lesson, coach */
     home.innerHTML='<div class="v2-greet" id="v2-greet"></div><div class="v2-date" id="v2-date"></div>'+
       '<div class="v2-card v2-quote" id="v2-quote"></div>'+
       '<div class="v2-card" id="v2-today"></div>'+
+      '<div id="v2-chal"></div>'+
       '<div id="v2-stats-slot"></div>'+
       '<div class="v2-card v2-lesson" id="v2-plancard" data-go="plan"></div>'+
       '<div class="v2-card" id="v2-coach"></div>'+
@@ -3939,6 +3941,7 @@ async function endAISession(){
     if(tab==='body' && window.lcnBody) lcnBody.open();
     if(tab==='aicoach') openAICoachTab();
     if(tab==='streaks') renderStreaks();
+    if(tab==='challenges' && window.lcnChallenges) lcnChallenges.open();
     window.scrollTo(0,0);
   }
   /* Everything that used to call switchTab(tab, btn) keeps working. */
@@ -3987,6 +3990,7 @@ async function endAISession(){
       '<p class="v2-p">'+(weak?'It’s been your toughest habit lately ('+weak.rate+'% of target). A quick chat can find one small fix.':'A short chat about your week, built on your real logs.')+'</p>'+
       '<button type="button" class="v2-btn ghost" data-go="aicoach">Open coach</button>';
 
+    if(window.lcnChallenges) lcnChallenges.homeCard(el('v2-chal'));
     var standalone=window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
     el('v2-install').style.display=standalone?'none':'block';
   }
@@ -4483,6 +4487,237 @@ async function endAISession(){
 })();
 </script>
 <!-- ══════════════ END RECIPES v1 ══════════════ -->
+<!-- ══════════════ CHALLENGES v1 ══════════════
+     Nine habit challenges from the Skool course (challenges/challenges.json,
+     images in challenges/img/). Eight run 2 weeks, No Alcohol runs 4. One
+     active challenge at a time: commit to a personal version of the habit,
+     tick off each day (aim: 6 days a week), and read that day's post.
+     State lives in the profile JSON (p.ch) so it syncs via setProfile.
+     Starting a challenge is Pro; everyone can browse and read Day 1. -->
+<style>
+  .ch-active{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:var(--shadow);margin-bottom:16px}
+  .ch-active-top{display:flex;gap:14px;align-items:center;padding:14px 16px;cursor:pointer}
+  .ch-thumb{width:64px;height:64px;border-radius:12px;object-fit:cover;flex-shrink:0;background:var(--green-light)}
+  .ch-k{font-size:11px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--red)}
+  .ch-h{font-family:"Nunito",sans-serif;font-size:18px;font-weight:900;color:var(--green-dark);line-height:1.2;margin-top:2px}
+  .ch-sub{font-size:13px;color:var(--muted);margin-top:3px;line-height:1.4}
+  .ch-dots{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;padding:0 16px 14px}
+  .ch-dot{aspect-ratio:1;border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--muted);background:#fff}
+  .ch-dot.done{background:var(--green);border-color:var(--green);color:#fff}
+  .ch-dot.today{border-color:var(--red);color:var(--red)}
+  .ch-dot.today.done{background:var(--green);border-color:var(--red);color:#fff}
+  .ch-dot.future{opacity:.45}
+  .ch-actions{display:flex;gap:8px;padding:0 16px 16px}
+  .ch-actions .v2-btn{margin-top:0}
+  .ch-btn-done{background:var(--red)}
+  .ch-btn-done.on{background:var(--green)}
+  .ch-week{font-size:12.5px;font-weight:700;color:var(--green-dark);padding:0 16px 10px}
+  .ch-list{display:grid;gap:12px}
+  .ch-card{display:flex;gap:14px;align-items:center;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:10px;box-shadow:var(--shadow);cursor:pointer;text-align:left;font:inherit;color:inherit;width:100%}
+  .ch-card img{width:84px;height:84px;border-radius:10px;object-fit:cover;flex-shrink:0;background:var(--green-light)}
+  .ch-card .t{font-family:"Nunito",sans-serif;font-weight:900;font-size:16px;color:var(--text)}
+  .ch-card .m{font-size:12px;font-weight:700;color:var(--muted);margin-top:2px}
+  .ch-card .d{font-size:13px;color:var(--text);margin-top:4px;line-height:1.35}
+  .ch-badge{display:inline-block;font-size:10px;font-weight:900;letter-spacing:.6px;border-radius:10px;padding:2px 7px;margin-left:6px;vertical-align:1px}
+  .ch-badge.pro{background:var(--red);color:#fff}
+  .ch-badge.won{background:var(--green-light);color:var(--green-dark)}
+  .ch-page{position:fixed;inset:0;z-index:320;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .ch-page[hidden]{display:none}
+  .ch-hero{position:relative}
+  .ch-hero img{width:100%;max-height:46vh;object-fit:cover;display:block;background:var(--green-light)}
+  .ch-x{position:absolute;left:14px;top:calc(12px + env(safe-area-inset-top));width:42px;height:42px;border-radius:50%;border:none;background:rgba(255,255,255,.95);color:var(--green-dark);font-size:19px;cursor:pointer}
+  .ch-in{max-width:680px;margin:-22px auto 0;position:relative;background:var(--bg);border-radius:22px 22px 0 0;padding:20px 16px 40px}
+  .ch-habit{background:var(--green-light);border-left:4px solid var(--green);border-radius:10px;padding:12px 14px;margin-top:14px;font-weight:700;color:var(--green-dark);font-size:15px}
+  .ch-read{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-top:16px}
+  .ch-read img{width:100%;border-radius:12px;margin-bottom:12px;max-height:280px;object-fit:cover}
+  .ch-read h3{font-family:"Nunito",sans-serif;font-size:16px;font-weight:900;color:var(--green-dark);margin:14px 0 4px}
+  .ch-read p{font-size:15px;line-height:1.6;margin:8px 0}
+  .ch-read ul{margin:8px 0 8px 2px;padding-left:18px}
+  .ch-read li{font-size:15px;line-height:1.5;margin:4px 0}
+  .ch-read a{color:var(--green-dark);font-weight:800}
+  .ch-daylabel{font-size:11px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted)}
+  .ch-commit{width:100%;min-height:96px;background:#f8fdf4;border:2px solid var(--border);border-radius:12px;padding:12px;font-family:"DM Sans",sans-serif;font-size:15px;line-height:1.5;color:var(--text);resize:vertical;outline:none;margin-top:8px}
+  .ch-commit:focus{border-color:var(--green)}
+  .ch-past{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .ch-past button{border:1.5px solid var(--border);background:#fff;border-radius:16px;padding:6px 11px;font-size:12.5px;font-weight:700;cursor:pointer;color:var(--text)}
+  .ch-past button.on{background:var(--green);color:#fff;border-color:var(--green)}
+  .ch-done-banner{background:linear-gradient(135deg,var(--green-dark),#5a9e2f);color:#fff;border-radius:16px;padding:18px;margin-top:16px;text-align:center}
+  .ch-done-banner b{display:block;font-family:"Nunito",sans-serif;font-size:22px}
+</style>
 
+<div class="ch-page" id="ch-page" hidden role="dialog" aria-modal="true" aria-label="Challenge"></div>
+
+<script>
+(function(){
+  "use strict";
+  if(!window.lcnProfile) return;
+  var el=function(id){return document.getElementById(id);};
+  var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});};
+  var C=null, loading=null, viewDay=null;
+  var TEMPLATE='I am 90-100% confident that I will … for 6 days a week after I …';
+
+  function load(){ if(C) return Promise.resolve(C); if(!loading) loading=fetch('challenges/challenges.json').then(function(r){return r.json();}).then(function(j){ C=j; return C; }); return loading; }
+  function byId(id){ return (C||[]).filter(function(c){return c.id===id;})[0]; }
+  function pro(){ return lcnProfile.isPro(); }
+  function getP(){ return lcnProfile.get()||lcnProfile.blank(); }
+  function state(){ var p=lcnProfile.get(); return (p&&p.ch)||{a:null,past:[]}; }
+  function save(st){ var p=getP(); p.ch=st; lcnProfile.save(p); }
+  function dayDiff(a,b){ return Math.round((Date.parse(b)-Date.parse(a))/864e5); }
+  function addDays(d,n){ var x=new Date(d+'T12:00:00'); x.setDate(x.getDate()+n); return x.toISOString().slice(0,10); }
+  function dayNo(a){ return dayDiff(a.start,today())+1; }
+  function total(c){ return c.w*7; }
+
+  /* ── active challenge widget (used on Home, the list and the detail page) ── */
+  function activeHtml(a,c,compact){
+    var n=dayNo(a), N=total(c), done=a.done||[], t=today(), isDone=done.indexOf(t)>=0;
+    if(n>N) return '<div class="ch-active"><div class="ch-active-top" data-ch-open="'+c.id+'"><img class="ch-thumb" src="'+c.cover+'" alt=""><div><div class="ch-k">Challenge complete</div>'+
+      '<div class="ch-h">'+esc(c.t)+'</div><div class="ch-sub">You hit '+done.length+' of '+N+' days. Tap to finish and pick your next one.</div></div></div></div>';
+    var wkStart=Math.floor((n-1)/7)*7, wkDone=0;
+    for(var i=0;i<7;i++){ if(done.indexOf(addDays(a.start,wkStart+i))>=0) wkDone++; }
+    var dots='';
+    for(var d=1; d<=N; d++){ var ds=addDays(a.start,d-1), cls=done.indexOf(ds)>=0?'done':'';
+      if(d===n) cls+=' today'; else if(d>n) cls+=' future';
+      dots+='<div class="ch-dot '+cls+'">'+(done.indexOf(ds)>=0?'✓':d)+'</div>'; }
+    return '<div class="ch-active">'+
+      '<div class="ch-active-top" data-ch-open="'+c.id+'"><img class="ch-thumb" src="'+c.cover+'" alt=""><div><div class="ch-k">Day '+n+' of '+N+'</div>'+
+        '<div class="ch-h">'+esc(c.t)+'</div><div class="ch-sub">'+esc(a.commit||c.habit)+'</div></div></div>'+
+      '<div class="ch-week">This week: '+wkDone+' of 6 days</div>'+
+      (compact?'':'<div class="ch-dots">'+dots+'</div>')+
+      '<div class="ch-actions"><button type="button" class="v2-btn ch-btn-done'+(isDone?' on':'')+'" data-ch-tick>'+(isDone?'✓ Done today':'Mark today done')+'</button>'+
+        (compact?'<button type="button" class="v2-btn ghost" data-ch-open="'+c.id+'">Today’s read</button>':'')+'</div></div>';
+  }
+  function tickToday(){
+    var st=state(); if(!st.a) return; var t=today(), d=st.a.done||[], i=d.indexOf(t);
+    if(i>=0) d.splice(i,1); else d.push(t);
+    st.a.done=d; save(st); refreshAll();
+  }
+
+  /* ── Home card ── */
+  function homeCard(box){
+    if(!box) return;
+    var st=state();
+    load().then(function(){
+      var c=st.a&&byId(st.a.id);
+      if(c){ box.innerHTML=activeHtml(st.a,c,true); }
+      else box.innerHTML='<div class="v2-card" style="cursor:pointer" data-go="challenges"><div class="v2-k">Challenges'+(pro()?'':' <span class="v2-pill pro">Pro</span>')+'</div>'+
+        '<div class="v2-h" style="font-size:17px">Take on a 2-week habit challenge</div><p class="v2-p">Water, protein, sleep, no alcohol and more — one habit, a daily read, and a tick each day.</p></div>';
+    });
+  }
+
+  /* ── Challenges screen (Track → Challenges) ── */
+  function open(){
+    var box=el('tab-challenges'); if(!box) return;
+    box.innerHTML='<div class="rc-empty">Loading challenges…</div>';
+    load().then(function(){ renderList(box); }).catch(function(){ box.innerHTML='<div class="rc-empty">Couldn’t load challenges — check your connection.</div>'; });
+  }
+  function renderList(box){
+    box=box||el('tab-challenges'); if(!box) return;
+    var st=state(), a=st.a, ac=a&&byId(a.id), won={};
+    (st.past||[]).forEach(function(x){ if(x.days>=Math.min(x.of, Math.ceil(x.of*6/7))) won[x.id]=true; });
+    box.innerHTML=(ac?'<div class="section-label">Your challenge</div>'+activeHtml(a,ac,false):'')+
+      (!pro()?'<div class="rc-up"><b>Habit challenges</b><p>Read Day 1 of any challenge free. Pro lets you start one, tick off each day and get a new read every day.</p>'+
+        (STRIPE_PAYMENT_LINK?'<a target="_blank" rel="noopener" href="'+STRIPE_PAYMENT_LINK+'?prefilled_email='+encodeURIComponent(currentEmail)+'">Upgrade to Pro</a>':'')+'</div>':'')+
+      '<div class="section-label">'+(ac?'More challenges':'Pick a challenge')+'</div><div class="ch-list">'+
+      C.filter(function(c){ return !ac||c.id!==ac.id; }).map(function(c){
+        return '<button type="button" class="ch-card" data-ch-open="'+c.id+'"><img loading="lazy" src="'+c.cover+'" alt=""><div><div class="t">'+esc(c.t)+
+          (won[c.id]?'<span class="ch-badge won">✓ DONE</span>':'')+(pro()?'':'<span class="ch-badge pro">PRO</span>')+'</div>'+
+          '<div class="m">'+c.w+' weeks · '+esc(c.habit)+'</div><div class="d">'+esc(c.blurb)+'</div></div></button>'; }).join('')+'</div>';
+  }
+
+  /* ── detail page ── */
+  function readingHtml(c,d){
+    var blocks=c.days[String(d)], img=c.img[String(d)];
+    if(!blocks) return '<div class="ch-read">'+(img?'<img src="'+img+'" alt="">':'')+'<div class="ch-daylabel">Day '+d+'</div><p>No new reading today. Keep showing up for your habit — that’s the whole job.</p></div>';
+    return '<div class="ch-read">'+(img?'<img loading="lazy" src="'+img+'" alt="">':'')+'<div class="ch-daylabel">Day '+d+'</div>'+
+      blocks.map(function(b){ if(b.h) return '<h3>'+esc(b.h)+'</h3>'; if(b.li) return '<ul>'+b.li.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul>';
+        if(b.link) return '<p><a href="'+esc(b.link)+'" target="_blank" rel="noopener">'+esc(b.text)+' ↗</a></p>'; return '<p>'+esc(b.p)+'</p>'; }).join('')+'</div>';
+  }
+  function openPage(id){
+    var c=byId(id); if(!c) return;
+    var page=el('ch-page'), st=state(), a=st.a, isActive=a&&a.id===id;
+    var html='<div class="ch-hero"><img src="'+c.cover+'" alt=""><button type="button" class="ch-x" data-ch-close aria-label="Back">‹</button></div><div class="ch-in">'+
+      '<div class="ch-k">'+c.w+'-week challenge</div><h1 class="v2-h" style="font-size:24px;margin-top:4px">'+esc(c.t)+'</h1><div class="ch-habit">'+esc(c.habit)+'</div>';
+    if(isActive){
+      var n=dayNo(a), N=total(c);
+      if(n>N){
+        html+='<div class="ch-done-banner"><b>Challenge complete 🎉</b>You ticked off '+(a.done||[]).length+' of '+N+' days.</div>'+
+          '<button type="button" class="v2-btn" data-ch-finish>Finish &amp; pick my next challenge</button>';
+        viewDay=Math.min(viewDay||N,N);
+      }else{
+        html+=activeHtml(a,c,false).replace('class="ch-active"','class="ch-active" style="margin-top:16px"');
+        viewDay=viewDay&&viewDay<=n?viewDay:n;
+      }
+      var maxD=Math.min(n,N), past='';
+      for(var d=1; d<=maxD; d++) if(c.days[String(d)]||d===maxD) past+='<button type="button" data-ch-day="'+d+'" class="'+(d===viewDay?'on':'')+'">Day '+d+'</button>';
+      html+='<div class="ch-past">'+past+'</div>'+readingHtml(c,viewDay)+
+        '<button type="button" class="v2-link" style="display:block;margin:22px auto 0;color:var(--muted)" data-ch-leave>Leave this challenge</button>';
+    }else{
+      html+='<p class="v2-p" style="margin-top:12px">'+esc(c.blurb)+'</p>';
+      if(pro()){
+        html+='<div class="v2-q" style="margin-top:16px;font-weight:800">Make it yours</div><p class="v2-p" style="font-size:13.5px">Scale it to something you’re 90–100% sure you can do 6 days a week, and tie it to something you already do.</p>'+
+          '<textarea class="ch-commit" id="ch-commit" maxlength="240" placeholder="'+esc(TEMPLATE)+'"></textarea>'+
+          '<button type="button" class="v2-btn red" data-ch-start>'+(a?'Switch to this challenge':'Start this challenge today')+'</button>'+
+          (a?'<p class="v2-note" style="text-align:center">This will end your current challenge.</p>':'');
+      }else if(STRIPE_PAYMENT_LINK){
+        html+='<a class="v2-btn red" target="_blank" rel="noopener" href="'+STRIPE_PAYMENT_LINK+'?prefilled_email='+encodeURIComponent(currentEmail)+'">Upgrade to Pro to start</a>';
+      }
+      html+='<div class="section-label" style="margin-top:22px">Day 1 — have a read</div>'+readingHtml(c,1);
+    }
+    page.innerHTML=html+'</div>';
+    if(page.hidden){ page.hidden=false; page.scrollTop=0; document.body.style.overflow='hidden'; try{ history.pushState({ch:1},''); }catch(e){} }
+    page.onclick=function(ev){
+      var t=ev.target;
+      if(t.closest('[data-ch-close]')){ closePage(); return; }
+      if(t.closest('[data-ch-tick]')){ tickToday(); openPage(id); return; }
+      var dd=t.closest('[data-ch-day]'); if(dd){ viewDay=+dd.dataset.chDay; openPage(id); return; }
+      if(t.closest('[data-ch-start]')){ start(c,el('ch-commit').value.trim()); viewDay=null; openPage(id); page.scrollTop=0; return; }
+      if(t.closest('[data-ch-finish]')){ finish(); closePage(); window.lcnShow&&lcnShow('challenges'); return; }
+      var lv=t.closest('[data-ch-leave]'); if(lv){ if(lv.dataset.armed){ leave(); closePage(); } else { lv.dataset.armed='1'; lv.textContent='Tap again to leave — your progress won’t be saved'; lv.style.color='var(--red)'; } }
+    };
+  }
+  function closePage(fromPop){
+    var page=el('ch-page'); if(page.hidden) return;
+    page.hidden=true; document.body.style.overflow=''; viewDay=null; refreshAll();
+    if(!fromPop){ try{ if(history.state&&history.state.ch) history.back(); }catch(e){} }
+  }
+  window.addEventListener('popstate',function(){ closePage(true); });
+
+  function start(c,commit){
+    var st=state();
+    if(st.a){ var old=byId(st.a.id); (st.past=st.past||[]).push({id:st.a.id,start:st.a.start,end:today(),days:(st.a.done||[]).length,of:old?total(old):14,left:true}); }
+    st.a={id:c.id,start:today(),commit:commit||'',done:[]}; save(st);
+  }
+  function finish(){ var st=state(); if(!st.a) return; var c=byId(st.a.id);
+    (st.past=st.past||[]).push({id:st.a.id,start:st.a.start,end:today(),days:(st.a.done||[]).length,of:c?total(c):14}); st.a=null; save(st); }
+  function leave(){ var st=state(); st.a=null; save(st); }
+
+  function refreshAll(){
+    var tc=el('tab-challenges'); if(tc && tc.style.display==='block' && C) renderList(tc);
+    var hb=el('v2-chal'); if(hb && el('tab-home') && el('tab-home').style.display==='block') homeCard(hb);
+  }
+  /* Clicks on the Home card / Track list. */
+  document.addEventListener('click',function(ev){
+    if(ev.target.closest('#ch-page')) return;
+    var host=ev.target.closest('#tab-challenges,#v2-chal'); if(!host) return;
+    if(ev.target.closest('[data-ch-tick]')){ tickToday(); return; }
+    var o=ev.target.closest('[data-ch-open]'); if(o){ load().then(function(){ openPage(o.dataset.chOpen); }); }
+  });
+
+  /* AI coach: tell it about the active challenge. */
+  if(typeof window.lcnProfilePrompt==='function'){
+    var _p=window.lcnProfilePrompt;
+    window.lcnProfilePrompt=function(){
+      var base=_p.apply(this,arguments)||'', st=state(), a=st.a; if(!a||!C) return base;
+      var c=byId(a.id); if(!c) return base;
+      return base+'\n\nCurrent habit challenge: '+c.t+' (day '+Math.min(dayNo(a),total(c))+' of '+total(c)+'). Habit: '+c.habit+'.'+
+        (a.commit?' Their own commitment: "'+a.commit+'".':'')+' Days ticked off so far: '+(a.done||[]).length+'. Encourage it where it fits; don’t force it into every reply.';
+    };
+  }
+  load().catch(function(){});   // warm the cache so the coach prompt and Home card have it
+
+  window.lcnChallenges={open:open,homeCard:homeCard};
+})();
+</script>
+<!-- ══════════════ END CHALLENGES v1 ══════════════ -->
 </body>
 </html>
