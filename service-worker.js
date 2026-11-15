@@ -1,6 +1,6 @@
 // LCN Coach — service worker
 // Bump CACHE_NAME whenever you want clients to drop cached static assets.
-const CACHE_NAME = 'lcn-coach-v9';
+const CACHE_NAME = 'lcn-coach-v10';
 
 // How long to wait for a fresh index.html before giving up and using the
 // cached copy. Long enough that a normal connection always wins; short
@@ -100,6 +100,28 @@ self.addEventListener('fetch', (event) => {
             network.catch(() => cached),
             deadline
           ]);
+        })
+      )
+    );
+    return;
+  }
+
+  /* Content files (recipes.json, challenges.json): answer from the cache
+     straight away so the screen is instant and works offline, but fetch a
+     fresh copy in the background every time and store it for the next open.
+     These used to be cache-first like the icons, so a new recipe never
+     reached anyone who already had the app until CACHE_NAME was bumped. */
+  if (url.pathname.endsWith('.json')) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then((cache) =>
+        cache.match(request).then((cached) => {
+          const fresh = fetch(request).then((response) => {
+            if (response && response.ok) cache.put(request, response.clone());
+            return response;
+          });
+          if (!cached) return fresh;
+          event.waitUntil(fresh.catch(() => {}));
+          return cached;
         })
       )
     );
