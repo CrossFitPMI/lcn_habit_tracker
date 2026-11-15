@@ -216,29 +216,62 @@ function updateLog(data){
   const name  = String(data.clientName || '');
   if (!id) return jsonOut_({error:'missing_id'});
 
+  /* Same date rules as addLog: a real yyyy-MM-dd, and not in the future. */
+  const tz = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
+  const date = String(data.date || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return jsonOut_({error:'bad_date'});
+  if (date > Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd')) return jsonOut_({error:'future_date'});
+
+  /* Same lock as addLog, so an edit and a save landing together can't
+     interleave their writes. */
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(15000); } catch (err) { return jsonOut_({error:'busy'}); }
+  try {
+    return updateLogLocked_(data, id, email, name, date, tz);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function updateLogLocked_(data, id, email, name, date, tz){
   const sheet   = getSheet();
   const rows    = sheet.getDataRange().getValues();
   const headers = rows[0];
   const col = function(h){ return headers.indexOf(h); };
 
-  const cID = col('ID'), cEmail = col('Client Email'), cName = col('Client Name');
+  const cID = col('ID'), cEmail = col('Client Email'), cName = col('Client Name'), cDate = col('Date');
   if (cID < 0) return jsonOut_({error:'no_id_column'});
+
+  const ownerOf = function(r){
+    const rowEmail = String(rows[r][cEmail] || '').toLowerCase().trim();
+    // pre-email rows fall back to name, matching how the rest of the app matches
+    return rowEmail ? (rowEmail === email) : (String(rows[r][cName] || '') === name);
+  };
+  const dateOf = function(r){
+    const v = rows[r][cDate];
+    return (v instanceof Date) ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : String(v).slice(0, 10);
+  };
 
   for (let r = 1; r < rows.length; r++){
     if (String(rows[r][cID]) !== id) continue;
 
-    const rowEmail = String(rows[r][cEmail] || '').toLowerCase().trim();
-    // pre-email rows fall back to name, matching how the rest of the app matches
-    const owns = rowEmail ? (rowEmail === email)
-                          : (String(rows[r][cName] || '') === name);
+    const owns = ownerOf(r);
     if (!owns) return jsonOut_({error:'not_yours'});
+
+    /* One log per client per day. Moving this log onto a day that already
+       has one would create the duplicate that addLog works to prevent. */
+    if (cDate >= 0){
+      for (let o = 1; o < rows.length; o++){
+        if (o !== r && ownerOf(o) && dateOf(o) === date) return jsonOut_({error:'date_taken'});
+      }
+    }
 
     const set = function(h, v){
       const i = col(h);
       if (i >= 0) sheet.getRange(r + 1, i + 1).setValue(v);
     };
 
-    set('Date',                  data.date);
+    set('Date',                  date);
     set('Water (L)',             data.water);
     set('Protein Target Hit',    data.proteinHit ? 'Yes' : 'No');
     set('No Alcohol',            data.noAlcohol  ? 'Yes' : 'No');

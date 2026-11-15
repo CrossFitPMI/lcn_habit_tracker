@@ -12,8 +12,11 @@ function doGet(e) {
   if (action === 'getLeaderboard') return getLeaderboard(e);
   if (action === 'getMyPrefs')     return getMyPrefs(e);
   if (action === 'getMyTargets')   return getMyTargets(e);
-  if (action === 'coachLogs')      return coachLogs(e);
-  if (action === 'checkCoachPin')  return checkCoachPin(e);
+  /* Retired with the in-app Coach View. Neither route had the wrong-PIN
+     lockout that coachData has, so a 4-digit PIN could be guessed through
+     them in minutes. The coach portal only uses coachData. */
+  if (action === 'coachLogs')      return jsonOut_({error:'gone'});
+  if (action === 'checkCoachPin')  return jsonOut_({error:'gone'});
   if (action === 'getLogs')        return jsonOut_({error:'gone'});
   if (action === 'getPrefs')       return jsonOut_({error:'gone'});
   if (action === 'getMealPrefs')   return getMealPrefs(e);
