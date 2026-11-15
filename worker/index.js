@@ -32,6 +32,18 @@
 
 const FREE_DAILY_CAP = 5;      // messages/day for free clients (matches the upsell model)
 const PRO_DAILY_CAP  = 100;    // effectively "unlimited" for a paying client, but still a ceiling
+
+/* Hard limits on what a single request may ask for. The Worker's address is
+   in the app's page source, and the "only our website may call this" (CORS)
+   rule only binds browsers — anyone can call the Worker directly. So every
+   request is checked here before a cent is spent. */
+const MODES            = ['chat', 'summary', 'mealplan', 'weekly'];  // anything else is refused
+const SUMMARY_DAILY_CAP = 10;      // end-of-session summaries per client per day
+const GLOBAL_DAILY_CAP  = 2000;    // AI calls per day across ALL clients — the bill's safety net
+const MAX_MESSAGES      = 40;      // the app sends at most 25
+const MAX_MESSAGE_CHARS = 60000;   // all message text in one request, combined
+const MAX_SYSTEM_CHARS  = 30000;   // the coach brief the app sends
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /* Origins allowed to call this Worker. The github.io address stays on the
    list so anyone who installed the app before the domain move keeps working —
    drop it once you're sure nobody's still on the old URL. */
@@ -74,8 +86,8 @@ export default {
     // Tier lookup for the app on load. GET, so it must sit above the
     // POST-only guard below. No AI call, no cap consumption.
     if (request.method === 'GET' && url.searchParams.get('action') === 'tier') {
-      const clientId = url.searchParams.get('clientId') || '';
-      const tier = clientId && (await isPro(clientId, env)) ? 'pro' : 'free';
+      const clientId = String(url.searchParams.get('clientId') || '').toLowerCase().trim();
+      const tier = clientId.length <= 254 && EMAIL_RE.test(clientId) && (await isPro(clientId, env)) ? 'pro' : 'free';
       return cors(json({ tier }));
     }
     if (request.method !== 'POST')    return cors(json({ error: 'POST only' }, 405));
@@ -84,9 +96,49 @@ export default {
     try { body = await request.json(); }
     catch { return cors(json({ error: 'Bad JSON' }, 400)); }
 
-    const { clientId, mode = 'chat', system, messages } = body;
-    if (!clientId || !Array.isArray(messages)) {
+    const { mode = 'chat', system } = body || {};
+    // Lower-cased so "Me@x.com" and "me@x.com" share one daily allowance.
+    const clientId = String((body && body.clientId) || '').toLowerCase().trim();
+    if (!clientId || !Array.isArray(body.messages)) {
       return cors(json({ error: 'Missing clientId or messages' }, 400));
+    }
+    if (clientId.length > 254 || !EMAIL_RE.test(clientId)) {
+      return cors(json({ error: 'bad_client' }, 400));
+    }
+    // Only the four modes the app uses. Previously an unknown mode skipped
+    // every cap and still got an AI reply.
+    if (!MODES.includes(mode)) {
+      return cors(json({ error: 'bad_mode' }, 400));
+    }
+    if (system !== undefined && system !== null && (typeof system !== 'string' || system.length > MAX_SYSTEM_CHARS)) {
+      return cors(json({ error: 'too_large' }, 413));
+    }
+    // Keep only role + text from each message, and refuse oversized requests.
+    if (body.messages.length < 1 || body.messages.length > MAX_MESSAGES) {
+      return cors(json({ error: 'too_large' }, 413));
+    }
+    let totalChars = 0;
+    const messages = [];
+    for (const m of body.messages) {
+      if (!m || (m.role !== 'user' && m.role !== 'assistant') || typeof m.content !== 'string') {
+        return cors(json({ error: 'bad_messages' }, 400));
+      }
+      totalChars += m.content.length;
+      messages.push({ role: m.role, content: m.content });
+    }
+    if (totalChars > MAX_MESSAGE_CHARS) {
+      return cors(json({ error: 'too_large' }, 413));
+    }
+    const today = new Date().toISOString().slice(0, 10);
+
+    // ── Whole-app daily ceiling ───────────────────────────────────────────
+    // Per-client caps can be sidestepped by inventing email addresses, so
+    // this caps the total. If it is ever hit on a normal day, raise
+    // GLOBAL_DAILY_CAP above.
+    const callsKey = `stats:${today}:calls`;
+    const callsToday = parseInt(await env.COACH_LIMITS.get(callsKey) || '0', 10);
+    if (callsToday >= GLOBAL_DAILY_CAP) {
+      return cors(json({ error: 'busy', message: 'The coach is very busy today. Please try again tomorrow.' }, 503));
     }
     // clientId is the client's email. Tier is decided here, server-side — from
     // Stripe-driven KV data plus the manual override list — never trust a tier
@@ -101,7 +153,6 @@ export default {
       if (tier !== 'pro') {
         return cors(json({ error: 'pro_required', message: 'Meal plans are part of Pro.' }, 403));
       }
-      const today = new Date().toISOString().slice(0, 10);
       mpKey = `mp:${clientId}:${today}`;
       const mpUsed = parseInt(await env.COACH_LIMITS.get(mpKey) || '0', 10);
       if (mpUsed >= 3) {
@@ -121,11 +172,22 @@ export default {
       }
     }
 
+    // ── Summaries: their own daily limit ──────────────────────────────────
+    // They don't count against the chat cap, but they are not unlimited —
+    // previously this mode had no limit at all.
+    if (mode === 'summary') {
+      const sKey = `sum:${clientId}:${today}`;
+      const sUsed = parseInt(await env.COACH_LIMITS.get(sKey) || '0', 10);
+      if (sUsed >= SUMMARY_DAILY_CAP) {
+        return cors(json({ error: 'cap_reached', message: "That's today's session summaries used up. Back tomorrow." }, 429));
+      }
+      await env.COACH_LIMITS.put(sKey, String(sUsed + 1), { expirationTtl: 172800 });
+    }
+
     // ── Per-client daily cap ──────────────────────────────────────────────
     // Summaries and weekly reviews don't count against the cap — only chat turns do.
     if (mode === 'chat') {
       const cap = tier === 'pro' ? PRO_DAILY_CAP : FREE_DAILY_CAP;
-      const today = new Date().toISOString().slice(0, 10);
       const key = `${clientId}:${today}`;
       const used = parseInt(await env.COACH_LIMITS.get(key) || '0', 10);
       if (used >= cap) {
@@ -180,6 +242,10 @@ REPLY LENGTH AND FORMAT:
     };
     if (systemBlocks) payload.system = systemBlocks;
 
+    // Counted only here, once the request has passed every check and is
+    // about to cost money — refused requests don't use up the day's ceiling.
+    await env.COACH_LIMITS.put(callsKey, String(callsToday + 1), { expirationTtl: 7776000 });
+
     // ── Call Anthropic ────────────────────────────────────────────────────
     let apiRes;
     try {
@@ -197,7 +263,8 @@ REPLY LENGTH AND FORMAT:
     }
 
     const data = await apiRes.json();
-    if (!apiRes.ok) return cors(json({ error: 'upstream_error', detail: data }, apiRes.status));
+    // Only the error type goes back to the browser, not the full upstream reply.
+    if (!apiRes.ok) return cors(json({ error: 'upstream_error', detail: (data && data.error && data.error.type) || '' }, apiRes.status));
 
     let text = (data.content || [])
       .filter(b => b.type === 'text')
@@ -236,7 +303,6 @@ REPLY LENGTH AND FORMAT:
             : "That one didn't come out right — hit generate again, it won't count against today's plans.",
         }, 502));
       }
-      const today = new Date().toISOString().slice(0, 10);
       const mpUsed = parseInt(await env.COACH_LIMITS.get(mpKey) || '0', 10);
       await env.COACH_LIMITS.put(mpKey, String(mpUsed + 1), { expirationTtl: 172800 });
       await bumpStat(env, `stats:${today}:mealplans`);
@@ -270,7 +336,6 @@ REPLY LENGTH AND FORMAT:
         : ['headline', 'went_well', 'focus'];
       const clean = {};
       fields.forEach(f => { if (review[f]) clean[f] = String(review[f]).slice(0, 700); });
-      const today = new Date().toISOString().slice(0, 10);
       const wkUsed = parseInt(await env.COACH_LIMITS.get(wkKey) || '0', 10);
       await env.COACH_LIMITS.put(wkKey, String(wkUsed + 1), { expirationTtl: 1209600 }); // 14 days
       await bumpStat(env, `stats:${today}:weekly_${tier}`);
@@ -347,19 +412,37 @@ async function handleStripeWebhook(request, env) {
 // webhook secret using HMAC-SHA256 — this recomputes that and compares it.
 async function verifyStripeSignature(payload, sigHeader, secret) {
   if (!secret) return false;
-  const parts = Object.fromEntries(sigHeader.split(',').map(p => {
-    const [k, v] = p.split('=');
-    return [k, v];
-  }));
-  if (!parts.t || !parts.v1) return false;
-  const signedPayload = `${parts.t}.${payload}`;
+  // Stripe may send more than one v1 signature (while a secret is being rolled).
+  let t = '';
+  const v1s = [];
+  sigHeader.split(',').forEach(p => {
+    const i = p.indexOf('=');
+    if (i < 0) return;
+    const k = p.slice(0, i).trim(), v = p.slice(i + 1).trim();
+    if (k === 't') t = v;
+    if (k === 'v1') v1s.push(v);
+  });
+  if (!t || !v1s.length) return false;
+  // Refuse anything signed more than 5 minutes ago, so a captured webhook
+  // can't be replayed later to re-grant Pro.
+  const age = Math.abs(Date.now() / 1000 - Number(t));
+  if (!isFinite(age) || age > 300) return false;
+  const signedPayload = `${t}.${payload}`;
   const key = await crypto.subtle.importKey(
     'raw', new TextEncoder().encode(secret),
     { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
   );
   const sigBuffer = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(signedPayload));
   const expected = [...new Uint8Array(sigBuffer)].map(b => b.toString(16).padStart(2, '0')).join('');
-  return expected === parts.v1;
+  return v1s.some(v => safeEqual(expected, v));
+}
+
+// Compares two strings without stopping at the first difference.
+function safeEqual(a, b) {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
 }
 
 // Simple daily counters for product visibility (messages sent, cap hits).
