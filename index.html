@@ -3778,6 +3778,13 @@ async function endAISession(){
   .v2-price span{font-size:13px;font-weight:700;color:var(--muted);margin-left:4px}
   .v2-btn.red{background:var(--red)}
   .v2-btn.soon{opacity:.85;cursor:default;letter-spacing:.5px}
+  .v2-tool{display:flex;gap:12px;align-items:center;padding:13px 0;border-bottom:1px solid var(--border);text-decoration:none;color:inherit}
+  .v2-tool:last-child{border-bottom:none}
+  .v2-tool .i{width:40px;height:40px;border-radius:12px;background:var(--green-light);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+  .v2-tool .b{flex:1;min-width:0}
+  .v2-tool .t{font-family:"Nunito",sans-serif;font-weight:800;font-size:15.5px;color:var(--green-dark)}
+  .v2-tool .x{font-size:12.5px;color:var(--muted);margin-top:2px;line-height:1.4}
+  .v2-tool .go{color:var(--red);font-weight:900;font-size:18px;flex-shrink:0}
   .v2-ticks{list-style:none;padding:0;margin:0}
   .v2-ticks li{position:relative;padding:7px 0 7px 28px;font-size:14.5px;line-height:1.45}
   .v2-ticks li::before{content:"✓";position:absolute;left:0;top:6px;width:20px;height:20px;border-radius:50%;background:var(--green);color:#fff;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center}
@@ -4004,6 +4011,11 @@ async function endAISession(){
   /* Flip to true when the course is ready to sell: the buttons become live checkout links. */
   var COURSE_LIVE=false;
   var COURSE_PORTAL='https://7jmjf220flyfe3xs9tf0.app.clientclub.net/';
+  /* Free tools on the main website, linked from the Learn tab. Add a line here to add another. */
+  var TOOLS=[
+    {icon:'🧮',t:'Calorie Calculator',x:'Find your daily calories and protein in about a minute.',url:'https://leancompnutrition.com/calorie-calculator'},
+    {icon:'🥩',t:'Protein Score',x:'Is that high-protein snack actually a good protein source? Score it from the label.',url:'https://leancompnutrition.com/protein-score'}
+  ];
   function renderLearn(){
     if(learn.dataset.built) return;
     learn.dataset.built='1';
@@ -4021,6 +4033,11 @@ async function endAISession(){
         '<div class="v2-price">€50 <span>once, yours for life</span></div>'+
         buy('Get the course')+
         '<a class="v2-btn ghost" href="'+COURSE_PORTAL+'" target="_blank" rel="noopener">Already have it? Open the course</a>'+
+      '</div>'+
+      '<div class="v2-card" style="padding:4px 18px"><div class="v2-k" style="margin:14px 0 2px">Free tools</div>'+
+        TOOLS.map(function(t){ return '<a class="v2-tool" href="'+t.url+'" target="_blank" rel="noopener">'+
+          '<div class="i">'+t.icon+'</div><div class="b"><div class="t">'+esc(t.t)+'</div><div class="x">'+esc(t.x)+'</div></div>'+
+          '<div class="go" aria-hidden="true">›</div></a>'; }).join('')+
       '</div>'+
       '<div class="v2-card"><div class="v2-k">What you get</div><ul class="v2-ticks">'+
         '<li>12 weekly video lessons, each with one simple action step</li>'+
