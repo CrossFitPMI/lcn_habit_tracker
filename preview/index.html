@@ -1168,8 +1168,8 @@ function renderSlipPanel(){
     rows.map(function(r){
       return '<div class="slip-row">'+
         '<span class="slip-dot" style="background:'+colourFor(r.days)+'"></span>'+
-        '<div><div class="slip-name">'+r.name+'</div>'+
-        '<div class="slip-meta">Last logged '+r.last+'</div></div>'+
+        '<div><div class="slip-name">'+escH(r.name)+'</div>'+
+        '<div class="slip-meta">Last logged '+escH(r.last)+'</div></div>'+
         '<div class="slip-days"><b style="color:'+colourFor(r.days)+'">'+r.days+'</b><span>days</span></div>'+
       '</div>';
     }).join('');
@@ -1196,14 +1196,14 @@ async function renderCoachView(){
       coachLoadError='Could not reach the server (timed out or blocked). Check your connection and try again.';
     }
     if(coachLoadError){
-      if(list0) list0.innerHTML='<div class="empty-state"><div class="icon">⚠️</div>'+coachLoadError+'</div>';
+      if(list0) list0.innerHTML='<div class="empty-state"><div class="icon">⚠️</div>'+escH(coachLoadError)+'</div>';
       return;
     }
   }
   let logs=[...coachAllLogs];
   if(coachFilter==='today'){const t=today();logs=logs.filter(l=>l['Date']===t);}
   else if(coachFilter==='week'){
-    const mon=new Date();mon.setDate(mon.getDate()-mon.getDay()+1);mon.setHours(0,0,0,0);
+    const mon=new Date();mon.setDate(mon.getDate()-((mon.getDay()+6)%7));mon.setHours(0,0,0,0);
     logs=logs.filter(l=>l['Date']&&new Date(l['Date'])>=mon);
   }
   renderSlipPanel();   // always from the full set, never the filtered view
@@ -1225,29 +1225,35 @@ function renderLogCard(l,showName){
     <div class="log-entry" style="border-left-color:${colour}">
       <div class="log-top">
         <div>
-          ${showName?`<div class="log-name">${l['Client Name']||'—'}${isPerfect?'<span class="perfect-badge">🏆 PERFECT</span>':''}</div>
-                      ${l['Client Email']?`<div style="font-size:11px;color:var(--muted);margin-top:-2px">${l['Client Email']}</div>`:''}`
+          ${showName?`<div class="log-name">${escH(l['Client Name']||'—')}${isPerfect?'<span class="perfect-badge">🏆 PERFECT</span>':''}</div>
+                      ${l['Client Email']?`<div style="font-size:11px;color:var(--muted);margin-top:-2px">${escH(l['Client Email'])}</div>`:''}`
                     :`${isPerfect?'<div style="margin-bottom:4px"><span class="perfect-badge">🏆 PERFECT DAY</span></div>':''}`}
-          <div class="log-date">${formatDate(l['Date'])}</div>
+          <div class="log-date">${escH(formatDate(l['Date']))}</div>
         </div>
         <div class="log-score" style="color:${colour}">${score}/100</div>
       </div>
       <div class="score-bar-wrap"><div class="score-bar-fill" style="width:${score}%;background:${colour}"></div></div>
       <div class="log-habits">
-        ${water?`<span class="habit-tag hit">💧 ${water}L</span>`:''}
-        ${sleep?`<span class="habit-tag hit">😴 ${sleep}h</span>`:''}
+        ${water?`<span class="habit-tag hit">💧 ${escH(water)}L</span>`:''}
+        ${sleep?`<span class="habit-tag hit">😴 ${escH(sleep)}h</span>`:''}
         ${steps?`<span class="habit-tag hit">👟 ${Number(steps).toLocaleString()}</span>`:''}
-        ${fv?`<span class="habit-tag hit">🥦 ${fv} portions</span>`:''}
+        ${fv?`<span class="habit-tag hit">🥦 ${escH(fv)} portions</span>`:''}
         <span class="habit-tag ${protein?'hit':'miss'}">${protein?'✓':'✗'} Protein</span>
         <span class="habit-tag ${alcohol?'hit':'miss'}">${alcohol?'✓':'✗'} No Alcohol</span>
         <span class="habit-tag ${exercise?'hit':'miss'}">${exercise?'✓':'✗'} Exercise</span>
       </div>
-      ${notes?`<div class="log-notes">"${notes}"</div>`:''}
-      ${(!showName && l['ID'])?`<button class="log-edit-btn" onclick="startEditLog('${l['ID']}')">✏️ Edit this log</button>`:''}
+      ${notes?`<div class="log-notes">"${escH(notes)}"</div>`:''}
+      ${(!showName && l['ID'])?`<button class="log-edit-btn" onclick="startEditLog('${String(l['ID']).replace(/[^A-Za-z0-9_-]/g,'')}')">✏️ Edit this log</button>`:''}
     </div>`;
 }
 
-function today(){return new Date().toISOString().split('T')[0];}
+/* Local calendar day, not UTC. toISOString() is UTC, so during Irish summer
+   time the hour after midnight came out as yesterday. */
+function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+/* Anything that came from a person or the server (names, emails, notes, AI
+   text) goes through this before it is put into the page as HTML. Without it
+   a "name" containing markup would run as code in other people's browsers. */
+function escH(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function formatDate(d){
   if(!d) return '';
   // Handle ISO timestamp from Google Sheets e.g. "2026-05-20T23:00:00.000Z"
@@ -1450,7 +1456,7 @@ async function renderStreaks(){
     html+=visible.map((g,i)=>`
       <div class="lb-row${g.isMe?' me':''}">
         <div class="lb-rank">${medals[i]||(i+1)}</div>
-        <div class="lb-name">${lbDisplayName(g.name)}${g.isMe?'<span class="lb-you">YOU</span>':''}</div>
+        <div class="lb-name">${escH(lbDisplayName(g.name))}${g.isMe?'<span class="lb-you">YOU</span>':''}</div>
         <div class="lb-streak">🔥 ${g.streak} day${g.streak===1?'':'s'}</div>
       </div>`).join('');
   }
@@ -1461,8 +1467,8 @@ async function renderStreaks(){
     html+=allTime.map((g,i)=>`
       <div class="lb-row${g.isMe?' me':''}">
         <div class="lb-rank">${medals[i]||(i+1)}</div>
-        <div class="lb-name">${lbDisplayName(g.name)}${g.isMe?'<span class="lb-you">YOU</span>':''}
-          ${g.best.ended?`<div style="font-size:11px;color:var(--muted);font-weight:600">set ${formatDate(g.best.ended)}</div>`:''}</div>
+        <div class="lb-name">${escH(lbDisplayName(g.name))}${g.isMe?'<span class="lb-you">YOU</span>':''}
+          ${g.best.ended?`<div style="font-size:11px;color:var(--muted);font-weight:600">set ${escH(formatDate(g.best.ended))}</div>`:''}</div>
         <div class="lb-streak">🏅 ${g.best.len} day${g.best.len===1?'':'s'}</div>
       </div>`).join('');
   }
@@ -1606,11 +1612,11 @@ function renderMealPrefsForm(){
       <label>Eating style</label>
       <select id="mpf-style">${['Balanced','High protein','Lower carb','Vegetarian','Vegan'].map(s=>`<option ${p.style===s?'selected':''}>${s}</option>`).join('')}</select>
       <label>Daily calorie target — optional, leave blank to skip</label>
-      <input type="text" id="mpf-cals" inputmode="numeric" placeholder="e.g. 2200" value="${p.cals||''}">
+      <input type="text" id="mpf-cals" inputmode="numeric" placeholder="e.g. 2200" value="${escH(p.cals||'')}">
       <label>Daily protein target (g) — optional</label>
-      <input type="text" id="mpf-protein" inputmode="numeric" placeholder="e.g. 150" value="${p.protein||''}">
+      <input type="text" id="mpf-protein" inputmode="numeric" placeholder="e.g. 150" value="${escH(p.protein||'')}">
       <label>Allergies &amp; ingredients to avoid — be thorough, this is treated as a hard rule</label>
-      <input type="text" id="mpf-avoid" placeholder="e.g. peanuts, shellfish, mushrooms" value="${(p.avoid||'').replace(/"/g,'&quot;')}">
+      <input type="text" id="mpf-avoid" placeholder="e.g. peanuts, shellfish, mushrooms" value="${escH(p.avoid||'')}">
       <label>Variety</label>
       <select id="mpf-variety">${['Keep it simple — repeats are fine','Mix it up — different every night'].map(s=>`<option ${p.variety===s?'selected':''}>${s}</option>`).join('')}</select>
       <button class="mp-btn" onclick="saveMealPrefs()">Save preferences</button>
@@ -1709,7 +1715,7 @@ function showMealPlanError(msg){
     n.textContent=msg;
     body.prepend(n);
   }else{
-    body.innerHTML=`<div class="mp-locked">${msg}</div>
+    body.innerHTML=`<div class="mp-locked">${escH(msg)}</div>
       <button class="ai-end-btn" onclick="renderMealPlanCard()">Back</button>`;
   }
 }
@@ -1721,21 +1727,21 @@ function renderMealPlan(plan){
     if(Array.isArray(d.meals)){
       const meals=d.meals.map(m=>`
         <div style="margin-bottom:6px">
-          <b style="font-size:13.5px">${m.type?m.type+': ':''}${m.meal}</b>
-          <span class="mp-meta">· ~${m.time_mins} min${m.calories?` · ~${m.calories} kcal`:''}${m.protein_g?` · ${m.protein_g}g protein`:''}</span>
-          ${m.notes?`<p>${m.notes}</p>`:''}
-          ${Array.isArray(m.instructions)&&m.instructions.length?`<details style="margin-top:3px"><summary style="font-size:12px;font-weight:700;color:var(--green-dark);cursor:pointer">Cooking steps</summary><ol style="font-size:12.5px;line-height:1.6;margin:4px 0 0 18px">${m.instructions.map(s=>`<li>${s}</li>`).join('')}</ol></details>`:''}
+          <b style="font-size:13.5px">${m.type?escH(m.type)+': ':''}${escH(m.meal)}</b>
+          <span class="mp-meta">· ~${escH(m.time_mins)} min${m.calories?` · ~${escH(m.calories)} kcal`:''}${m.protein_g?` · ${escH(m.protein_g)}g protein`:''}</span>
+          ${m.notes?`<p>${escH(m.notes)}</p>`:''}
+          ${Array.isArray(m.instructions)&&m.instructions.length?`<details style="margin-top:3px"><summary style="font-size:12px;font-weight:700;color:var(--green-dark);cursor:pointer">Cooking steps</summary><ol style="font-size:12.5px;line-height:1.6;margin:4px 0 0 18px">${m.instructions.map(s=>`<li>${escH(s)}</li>`).join('')}</ol></details>`:''}
         </div>`).join('');
       const fullDay = mealPrefs && mealPrefs.scope && mealPrefs.scope!=='Dinners only';
       const showTarget = fullDay && mealPrefs && (mealPrefs.cals||mealPrefs.protein);
-      const totals=d.day_totals?`<div class="mp-meta" style="margin-top:4px;font-weight:700">${fullDay?'Day total':'Dinner'}: ~${d.day_totals.calories||'—'} kcal · ${d.day_totals.protein_g||'—'}g protein${showTarget?` (daily target: ${mealPrefs.cals?mealPrefs.cals+' kcal':''}${mealPrefs.cals&&mealPrefs.protein?' / ':''}${mealPrefs.protein?mealPrefs.protein+'g':''})`:''}</div>`:'';
-      return `<div class="mp-day"><b>${d.day}</b>${totals}<div style="margin-top:6px">${meals}</div></div>`;
+      const totals=d.day_totals?`<div class="mp-meta" style="margin-top:4px;font-weight:700">${fullDay?'Day total':'Dinner'}: ~${escH(d.day_totals.calories||'—')} kcal · ${escH(d.day_totals.protein_g||'—')}g protein${showTarget?` (daily target: ${mealPrefs.cals?escH(mealPrefs.cals)+' kcal':''}${mealPrefs.cals&&mealPrefs.protein?' / ':''}${mealPrefs.protein?escH(mealPrefs.protein)+'g':''})`:''}</div>`:'';
+      return `<div class="mp-day"><b>${escH(d.day)}</b>${totals}<div style="margin-top:6px">${meals}</div></div>`;
     }
-    return `<div class="mp-day"><b>${d.day}</b> <span class="mp-meta">· ${d.meal} · ~${d.time_mins} min</span>${d.notes?`<p>${d.notes}</p>`:''}</div>`;
+    return `<div class="mp-day"><b>${escH(d.day)}</b> <span class="mp-meta">· ${escH(d.meal)} · ~${escH(d.time_mins)} min</span>${d.notes?`<p>${escH(d.notes)}</p>`:''}</div>`;
   }).join('');
   const shop=(plan.shopping_list||[]).map(c=>`
-    <div class="mp-shop-cat">${c.category}</div>
-    <div class="mp-shop-items">${(c.items||[]).join('<br>')}</div>`).join('');
+    <div class="mp-shop-cat">${escH(c.category)}</div>
+    <div class="mp-shop-items">${(c.items||[]).map(escH).join('<br>')}</div>`).join('');
   body.innerHTML=`${days}
     <div class="mp-title" style="margin-top:14px">🛒 Shopping list</div>${shop}
     <button class="mp-btn" onclick="printShoppingList()">🖨️ Print / save shopping list as PDF</button>
@@ -1748,8 +1754,8 @@ function printShoppingList(){
   if(!lastMealPlan||!lastMealPlan.shopping_list) return;
   const logoSrc=(document.querySelector('img')||{}).src||'';
   const cats=lastMealPlan.shopping_list.map(c=>`
-    <h3>${c.category}</h3>
-    <ul>${(c.items||[]).map(i=>`<li>${i}</li>`).join('')}</ul>`).join('');
+    <h3>${escH(c.category)}</h3>
+    <ul>${(c.items||[]).map(i=>`<li>${escH(i)}</li>`).join('')}</ul>`).join('');
   const w=window.open('','_blank');
   if(!w){ alert('Allow pop-ups for this site to save the PDF.'); return; }
   w.document.write(`<!DOCTYPE html><html><head><title>Shopping List — Lean Comp Nutrition</title>
@@ -2186,9 +2192,9 @@ async function endAISession(){
     const header=`<p style="font-family:'Nunito',sans-serif;font-size:12px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--green-dark);margin-bottom:8px">Session summary</p>`;
     if(isPro){
       card.innerHTML=`${header}
-        <div class="ai-summary-line">${parsed.key_insight}</div>
-        <div class="ai-summary-line">${parsed.action_item}</div>
-        <div class="ai-summary-line">${parsed.pattern_noticed}</div>
+        <div class="ai-summary-line">${escH(parsed.key_insight)}</div>
+        <div class="ai-summary-line">${escH(parsed.action_item)}</div>
+        <div class="ai-summary-line">${escH(parsed.pattern_noticed)}</div>
         <span class="ai-badge">Check-in complete</span>
       `;
     }else{
@@ -2197,7 +2203,7 @@ async function endAISession(){
       // The dots below are pure placeholders.
       const upgradeHref=STRIPE_PAYMENT_LINK?`${STRIPE_PAYMENT_LINK}?prefilled_email=${encodeURIComponent(currentEmail)}`:'#';
       card.innerHTML=`${header}
-        <div class="ai-summary-line">${parsed.key_insight}</div>
+        <div class="ai-summary-line">${escH(parsed.key_insight)}</div>
         <div class="ai-summary-line" style="color:var(--muted);letter-spacing:2px">Your action item: •••• ••••• ••••••• •••• •• ••••</div>
         <div class="ai-summary-line" style="color:var(--muted);letter-spacing:2px">Pattern noticed: •••••• •••• ••• •••••••• •• ••••</div>
         ${STRIPE_PAYMENT_LINK?`<a href="${upgradeHref}" target="_blank" class="btn-solid" style="display:inline-block;margin-top:6px;background:var(--green);color:#fff;text-decoration:none;font-weight:700;font-size:13px;padding:9px 16px;border-radius:10px">Unlock your full summary — go Pro →</a>`:''}
