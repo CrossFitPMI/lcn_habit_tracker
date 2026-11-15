@@ -498,7 +498,7 @@ function cleanDuplicates_(dryRun){
 /* Calls the DEPLOYED web app the same way index.html does. If the deployment
    is serving old code, the second call returns a new id instead of updated:true. */
 function testLiveEndpoint(){
-  const url = 'https://script.google.com/macros/s/AKfycby0FsfiEBZcbaoLtNtfExIpHNaRkuylq-qjrLZITIQIJUn4JQKuvrlfmm4wiyWbQvmf/exec';
+  const url = 'https://script.google.com/macros/s/AKfycbyyNOABBFi7Q3IzqUYQ_OkYimfKWOOnjqo5FQp_nLobGbn48p0sdw3kziuuoZsbh-ux/exec';
   const d = Utilities.formatDate(new Date(),
               SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'yyyy-MM-dd');
   const payload = function(water){
@@ -526,7 +526,7 @@ function testLiveEndpoint(){
 /* Asks the live URL who it is. Old deployments don't know about the 'version'
    action and will answer "Unknown action" — that's the tell. */
 function whichDeployment(){
-  const url = 'https://script.google.com/macros/s/AKfycby0FsfiEBZcbaoLtNtfExIpHNaRkuylq-qjrLZITIQIJUn4JQKuvrlfmm4wiyWbQvmf/exec';
+  const url = 'https://script.google.com/macros/s/AKfycbyyNOABBFi7Q3IzqUYQ_OkYimfKWOOnjqo5FQp_nLobGbn48p0sdw3kziuuoZsbh-ux/exec';
   Logger.log('URL in index.html answers: ' +
     UrlFetchApp.fetch(url + '?action=version', {muteHttpExceptions:true}).getContentText());
   try {
