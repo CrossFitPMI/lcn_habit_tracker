@@ -608,6 +608,21 @@ async function refreshTier(){
     if(data && data.tier) setTier(data.tier,currentEmail);
   }catch(e){ /* offline or endpoint not deployed — keep cached tier */ }
 }
+/* The Stripe upgrade link for this client. prefilled_email fills in the
+   checkout form, but the client can still change it — and Pro used to be
+   granted only to whatever email they typed at Stripe, so paying with a
+   different address meant paying and never unlocking. client_reference_id
+   carries the app's own email through the checkout untouched (encoded,
+   because Stripe only allows letters, digits, - and _ there), and the
+   Worker grants Pro to that email as well. */
+function upgradeUrl(){
+  let u=STRIPE_PAYMENT_LINK+'?prefilled_email='+encodeURIComponent(currentEmail);
+  try{
+    const ref=btoa(currentEmail).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+    if(ref && ref.length<=200) u+='&client_reference_id='+ref;
+  }catch(e){ /* unusual characters in the email — the prefilled email still applies */ }
+  return u;
+}
 const justUpgraded = new URLSearchParams(location.search).get('upgraded') === '1';
 if(justUpgraded) history.replaceState({}, '', location.pathname);
 /* Back from Stripe: bank it so the unlock survives the next refresh too. */
@@ -1585,7 +1600,7 @@ function renderMealPlanCard(){
   const body=document.getElementById('mp-body');
   const isPro = currentTier==='pro' || justUpgraded;
   if(!isPro){
-    const upgradeHref=STRIPE_PAYMENT_LINK?`${STRIPE_PAYMENT_LINK}?prefilled_email=${encodeURIComponent(currentEmail)}`:'';
+    const upgradeHref=STRIPE_PAYMENT_LINK?upgradeUrl():'';
     body.innerHTML=`<div class="mp-locked">🔒 A weekly meal plan and shopping list, built around your habits, your kitchen, and anything you need to avoid — part of Pro.${upgradeHref?`<br><a href="${upgradeHref}" target="_blank" class="btn-solid" style="display:inline-block;margin-top:10px;background:var(--green);color:#fff;text-decoration:none;font-weight:700;font-size:13px;padding:9px 16px;border-radius:10px">Upgrade to Pro →</a>`:''}</div>`;
     return;
   }
@@ -2019,7 +2034,7 @@ class AICapReached extends Error{constructor(msg){super(msg);this.name='AICapRea
 
 function setUpgradeLinks(){
   if(STRIPE_PAYMENT_LINK){
-    const url=`${STRIPE_PAYMENT_LINK}?prefilled_email=${encodeURIComponent(currentEmail)}`;
+    const url=upgradeUrl();
     document.getElementById('ai-upgrade-link').href=url;
     document.getElementById('ai-upgrade-banner-link').href=url;
   }
@@ -2201,7 +2216,7 @@ async function endAISession(){
       // Free tier: the Worker already strips action_item and pattern_noticed
       // server-side, so the locked content never reaches this browser at all.
       // The dots below are pure placeholders.
-      const upgradeHref=STRIPE_PAYMENT_LINK?`${STRIPE_PAYMENT_LINK}?prefilled_email=${encodeURIComponent(currentEmail)}`:'#';
+      const upgradeHref=STRIPE_PAYMENT_LINK?upgradeUrl():'#';
       card.innerHTML=`${header}
         <div class="ai-summary-line">${escH(parsed.key_insight)}</div>
         <div class="ai-summary-line" style="color:var(--muted);letter-spacing:2px">Your action item: •••• ••••• ••••••• •••• •• ••••</div>
@@ -3662,7 +3677,7 @@ async function endAISession(){
     if(r.to_work_on) h+='<div class="ci-sec"><h4>🔧 What to work on</h4><p>'+esc(r.to_work_on)+'</p></div>';
     if(r.focus) h+='<div class="ci-sec focus"><h4>🎯 Your focus this week</h4><div class="f">'+esc(r.focus)+'</div>'+(r.focus_why?'<div class="why">'+esc(r.focus_why)+'</div>':'')+'</div>';
     if(!pro){
-      var href=STRIPE_PAYMENT_LINK?STRIPE_PAYMENT_LINK+'?prefilled_email='+encodeURIComponent(currentEmail):'';
+      var href=STRIPE_PAYMENT_LINK?upgradeUrl():'';
       h+='<div class="ci-sec locked"><h4>🔒 Week on week</h4><p>••••• •••• ••• ••••••• •• •••• ••••• ••••</p></div>'+
          '<div class="ci-sec locked"><h4>🔒 What to work on</h4><p>•••• ••••••• ••• •••• •••••• ••• •••</p></div>'+
          (href?'<a class="ci-up" href="'+href+'" target="_blank" rel="noopener">Unlock your full weekly review: go Pro →</a>':'');
@@ -4082,7 +4097,7 @@ async function endAISession(){
     var standalone=window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
     var subLink=isPro()
       ? (STRIPE_CUSTOMER_PORTAL_LINK?'<a class="v2-link" target="_blank" href="'+STRIPE_CUSTOMER_PORTAL_LINK+'">Manage</a>':'')
-      : (STRIPE_PAYMENT_LINK?'<a class="v2-link" target="_blank" href="'+STRIPE_PAYMENT_LINK+'?prefilled_email='+encodeURIComponent(currentEmail)+'">Upgrade</a>':'');
+      : (STRIPE_PAYMENT_LINK?'<a class="v2-link" target="_blank" href="'+upgradeUrl()+'">Upgrade</a>':'');
     el('v2-profile-in').innerHTML=
       '<div class="v2-me"><div class="big">'+esc(initials())+'</div><div class="nm">'+esc(currentUser)+'</div><div class="em">'+esc(currentEmail)+'</div></div>'+
 
@@ -4375,7 +4390,7 @@ async function endAISession(){
     if(!box.dataset.ready){
       box.dataset.ready='1';
       box.innerHTML=(pro()?'':'<div class="rc-up"><b>Over 130 high-protein recipes</b><p>Try the free ones on us. Pro unlocks the full library, favourites and your weekly meal plan.</p>'+
-          (STRIPE_PAYMENT_LINK?'<a target="_blank" rel="noopener" href="'+STRIPE_PAYMENT_LINK+'?prefilled_email='+encodeURIComponent(currentEmail)+'">Upgrade to Pro</a>':'')+'</div>')+
+          (STRIPE_PAYMENT_LINK?'<a target="_blank" rel="noopener" href="'+upgradeUrl()+'">Upgrade to Pro</a>':'')+'</div>')+
         '<input class="rc-search" id="rc-q" type="search" placeholder="Search recipes or ingredients…" autocomplete="off">'+
         '<div class="rc-chips" id="rc-cats">'+CATS.map(function(c){return '<button type="button" class="rc-chip" data-cat="'+esc(c)+'">'+esc(c)+'</button>';}).join('')+
           '<button type="button" class="rc-chip fav" data-fav="1">♥ Favourites</button></div>'+
@@ -4465,7 +4480,7 @@ async function endAISession(){
     page.innerHTML='<div class="rc-hero"><img src="'+r.img+'" alt=""><button type="button" class="rc-x" data-rc-close aria-label="Back">‹</button></div>'+
       '<div class="rc-in"><div class="rc-cat">'+esc(r.c)+'</div><h1 class="rc-h1">'+esc(r.t)+'</h1>'+
       '<p class="v2-p" style="margin-top:10px">This recipe is part of <b>Pro</b> — along with the full library of over 130 high-protein recipes, favourites, and a weekly meal plan with a shopping list built around you.</p>'+
-      (STRIPE_PAYMENT_LINK?'<a class="v2-btn red" target="_blank" rel="noopener" href="'+STRIPE_PAYMENT_LINK+'?prefilled_email='+encodeURIComponent(currentEmail)+'">Upgrade to Pro</a>':'')+
+      (STRIPE_PAYMENT_LINK?'<a class="v2-btn red" target="_blank" rel="noopener" href="'+upgradeUrl()+'">Upgrade to Pro</a>':'')+
       '<button type="button" class="v2-btn ghost" data-rc-close>Back to recipes</button></div>';
     page.hidden=false; page.scrollTop=0; document.body.style.overflow='hidden';
     try{ history.pushState({rc:1},''); }catch(e){}
@@ -4647,7 +4662,7 @@ async function endAISession(){
     (st.past||[]).forEach(function(x){ if(x.days>=Math.min(x.of, Math.ceil(x.of*6/7))) won[x.id]=true; });
     box.innerHTML=(ac?'<div class="section-label">Your challenge</div>'+activeHtml(a,ac,false):'')+
       (!pro()?'<div class="rc-up"><b>Habit challenges</b><p>Read Day 1 of any challenge free. Pro lets you start one, tick off each day and get a new read every day.</p>'+
-        (STRIPE_PAYMENT_LINK?'<a target="_blank" rel="noopener" href="'+STRIPE_PAYMENT_LINK+'?prefilled_email='+encodeURIComponent(currentEmail)+'">Upgrade to Pro</a>':'')+'</div>':'')+
+        (STRIPE_PAYMENT_LINK?'<a target="_blank" rel="noopener" href="'+upgradeUrl()+'">Upgrade to Pro</a>':'')+'</div>':'')+
       '<div class="section-label">'+(ac?'More challenges':'Pick a challenge')+'</div><div class="ch-list">'+
       C.filter(function(c){ return !ac||c.id!==ac.id; }).map(function(c){
         return '<button type="button" class="ch-card" data-ch-open="'+c.id+'"><img loading="lazy" src="'+c.cover+'" alt=""><div><div class="t">'+esc(c.t)+
@@ -4690,7 +4705,7 @@ async function endAISession(){
           '<button type="button" class="v2-btn red" data-ch-start>'+(a?'Switch to this challenge':'Start this challenge today')+'</button>'+
           (a?'<p class="v2-note" style="text-align:center">This will end your current challenge.</p>':'');
       }else if(STRIPE_PAYMENT_LINK){
-        html+='<a class="v2-btn red" target="_blank" rel="noopener" href="'+STRIPE_PAYMENT_LINK+'?prefilled_email='+encodeURIComponent(currentEmail)+'">Upgrade to Pro to start</a>';
+        html+='<a class="v2-btn red" target="_blank" rel="noopener" href="'+upgradeUrl()+'">Upgrade to Pro to start</a>';
       }
       html+='<div class="section-label" style="margin-top:22px">Day 1 — have a read</div>'+readingHtml(c,1);
     }
