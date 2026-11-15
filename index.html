@@ -4572,7 +4572,14 @@ async function endAISession(){
   .ch-in{max-width:680px;margin:-22px auto 0;position:relative;background:var(--bg);border-radius:22px 22px 0 0;padding:20px 16px 40px}
   .ch-habit{background:var(--green-light);border-left:4px solid var(--green);border-radius:10px;padding:12px 14px;margin-top:14px;font-weight:700;color:var(--green-dark);font-size:15px}
   .ch-read{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-top:16px}
-  .ch-read img{width:100%;border-radius:12px;margin-bottom:12px;max-height:280px;object-fit:cover}
+  /* Shown whole, never cropped: many of these are tall graphics with text on
+     them, and a fixed-height crop cut the words off. Tap to see it full screen. */
+  .ch-read img{width:100%;height:auto;display:block;border-radius:12px;margin-bottom:12px;cursor:zoom-in}
+  .ch-hero img{cursor:zoom-in}
+  .ch-zoom{position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;padding:12px;cursor:zoom-out}
+  .ch-zoom[hidden]{display:none}
+  .ch-zoom img{max-width:100%;max-height:100%;object-fit:contain;border-radius:8px}
+  .ch-zoom .x{position:absolute;top:calc(10px + env(safe-area-inset-top));right:12px;width:40px;height:40px;border-radius:50%;border:none;background:rgba(255,255,255,.18);color:#fff;font-size:22px;line-height:1;cursor:pointer}
   .ch-read h3{font-family:"Nunito",sans-serif;font-size:16px;font-weight:900;color:var(--green-dark);margin:14px 0 4px}
   .ch-read p{font-size:15px;line-height:1.6;margin:8px 0}
   .ch-read ul{margin:8px 0 8px 2px;padding-left:18px}
@@ -4589,6 +4596,7 @@ async function endAISession(){
 </style>
 
 <div class="ch-page" id="ch-page" hidden role="dialog" aria-modal="true" aria-label="Challenge"></div>
+<div class="ch-zoom" id="ch-zoom" hidden role="dialog" aria-modal="true" aria-label="Picture, full screen"><img alt=""><button type="button" class="x" aria-label="Close">✕</button></div>
 
 <script>
 (function(){
@@ -4670,15 +4678,15 @@ async function endAISession(){
   /* ── detail page ── */
   function readingHtml(c,d){
     var blocks=c.days[String(d)], img=c.img[String(d)];
-    if(!blocks) return '<div class="ch-read">'+(img?'<img src="'+img+'" alt="">':'')+'<div class="ch-daylabel">Day '+d+'</div><p>No new reading today. Keep showing up for your habit — that’s the whole job.</p></div>';
-    return '<div class="ch-read">'+(img?'<img loading="lazy" src="'+img+'" alt="">':'')+'<div class="ch-daylabel">Day '+d+'</div>'+
+    if(!blocks) return '<div class="ch-read">'+(img?'<img data-ch-zoom src="'+img+'" alt="Day '+d+' picture. Tap to see it full screen.">':'')+'<div class="ch-daylabel">Day '+d+'</div><p>No new reading today. Keep showing up for your habit — that’s the whole job.</p></div>';
+    return '<div class="ch-read">'+(img?'<img data-ch-zoom loading="lazy" src="'+img+'" alt="Day '+d+' picture. Tap to see it full screen.">':'')+'<div class="ch-daylabel">Day '+d+'</div>'+
       blocks.map(function(b){ if(b.h) return '<h3>'+esc(b.h)+'</h3>'; if(b.li) return '<ul>'+b.li.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul>';
         if(b.link) return '<p><a href="'+esc(b.link)+'" target="_blank" rel="noopener">'+esc(b.text)+' ↗</a></p>'; return '<p>'+esc(b.p)+'</p>'; }).join('')+'</div>';
   }
   function openPage(id){
     var c=byId(id); if(!c) return;
     var page=el('ch-page'), st=state(), a=st.a, isActive=a&&a.id===id;
-    var html='<div class="ch-hero"><img src="'+c.cover+'" alt=""><button type="button" class="ch-x" data-ch-close aria-label="Back">‹</button></div><div class="ch-in">'+
+    var html='<div class="ch-hero"><img data-ch-zoom src="'+c.cover+'" alt=""><button type="button" class="ch-x" data-ch-close aria-label="Back">‹</button></div><div class="ch-in">'+
       '<div class="ch-k">'+c.w+'-week challenge</div><h1 class="v2-h" style="font-size:24px;margin-top:4px">'+esc(c.t)+'</h1><div class="ch-habit">'+esc(c.habit)+'</div>';
     if(isActive){
       var n=dayNo(a), N=total(c);
@@ -4711,6 +4719,7 @@ async function endAISession(){
     page.onclick=function(ev){
       var t=ev.target;
       if(t.closest('[data-ch-close]')){ closePage(); return; }
+      var zi=t.closest('[data-ch-zoom]'); if(zi){ openZoom(zi.currentSrc||zi.src); return; }
       if(t.closest('[data-ch-tick]')){ tickToday(); openPage(id); return; }
       var dd=t.closest('[data-ch-day]'); if(dd){ viewDay=+dd.dataset.chDay; openPage(id); return; }
       if(t.closest('[data-ch-start]')){ start(c,el('ch-commit').value.trim()); viewDay=null; openPage(id); page.scrollTop=0; return; }
@@ -4723,7 +4732,25 @@ async function endAISession(){
     page.hidden=true; document.body.style.overflow=''; viewDay=null; refreshAll();
     if(!fromPop){ try{ if(history.state&&history.state.ch) history.back(); }catch(e){} }
   }
-  window.addEventListener('popstate',function(){ closePage(true); });
+  /* ── full-screen picture ── */
+  function openZoom(src){
+    var z=el('ch-zoom'); if(!z||!src) return;
+    z.querySelector('img').src=src; z.hidden=false;
+    try{ history.pushState({chz:1},''); }catch(e){}
+    z.onclick=function(){ closeZoom(); };
+  }
+  function closeZoom(fromPop){
+    var z=el('ch-zoom'); if(!z||z.hidden) return;
+    z.hidden=true;
+    if(!fromPop){ try{ if(history.state&&history.state.chz) history.back(); }catch(e){} }
+  }
+  /* Back button: close the picture first if one is open, otherwise the page. */
+  window.addEventListener('popstate',function(){
+    var z=el('ch-zoom'); if(z&&!z.hidden){ closeZoom(true); return; }
+    if(history.state&&history.state.ch) return;   // just stepped back from the picture; the page stays
+    closePage(true);
+  });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeZoom(); });
 
   function start(c,commit){
     var st=state();
