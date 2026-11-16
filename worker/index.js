@@ -43,6 +43,12 @@ const GLOBAL_DAILY_CAP  = 2000;    // AI calls per day across ALL clients — th
 const MAX_MESSAGES      = 40;      // the app sends at most 25
 const MAX_MESSAGE_CHARS = 60000;   // all message text in one request, combined
 const MAX_SYSTEM_CHARS  = 30000;   // the coach brief the app sends
+/* The coach's opening line of a check-in is sent by the app, not typed by
+   the client, so it shouldn't use up one of their free messages. The app
+   always sends exactly this text for it. Limited per day so it can't be
+   used as free chat. */
+const OPENER_TEXT = 'Open the check-in with a short, specific message based on my real data above. Reference something concrete from it.';
+const FREE_OPENERS_PER_DAY = 3;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /* Origins allowed to call this Worker. The github.io address stays on the
    list so anyone who installed the app before the domain move keeps working —
@@ -203,8 +209,19 @@ export default {
           used, cap,
         }, 429));
       }
+      // The app's own opening line doesn't cost a message (up to a few a
+      // day). It still can't be sent once the day's cap is reached, above.
+      let freeOpener = false;
+      if (messages.length === 1 && messages[0].content === OPENER_TEXT) {
+        const oKey = `open:${clientId}:${today}`;
+        const oUsed = parseInt(await env.COACH_LIMITS.get(oKey) || '0', 10);
+        if (oUsed < FREE_OPENERS_PER_DAY) {
+          await env.COACH_LIMITS.put(oKey, String(oUsed + 1), { expirationTtl: 172800 });
+          freeOpener = true;
+        }
+      }
       // Counter expires 48h out so it self-cleans; increment before the call.
-      await env.COACH_LIMITS.put(key, String(used + 1), { expirationTtl: 172800 });
+      if (!freeOpener) await env.COACH_LIMITS.put(key, String(used + 1), { expirationTtl: 172800 });
       await bumpStat(env, `stats:${today}:messages`);
       await bumpStat(env, `stats:${today}:messages_${tier}`);
     }
@@ -241,6 +258,19 @@ REPLY LENGTH AND FORMAT:
       messages: mode === 'weekly' ? [{ role: 'user', content: 'Write my weekly review now.' }] : messages,
     };
     if (systemBlocks) payload.system = systemBlocks;
+
+    /* Claude Sonnet 5 "thinks" before it answers unless told not to, and that
+       thinking is paid for out of max_tokens. With the small limits used
+       here (500-1000) a busier request could spend the whole allowance
+       thinking and return no text at all — which is how Pro weekly reviews
+       came back as "didn't come out right" every time for some clients.
+       These are short, structured replies that don't need it, so it is
+       switched off. Meal plans keep it (they have 16,000 tokens of room).
+       NOTE: only Sonnet 5 accepts "disabled". If MODELS is ever changed to
+       a newer model, check its docs before keeping this line. */
+    if (payload.model === 'claude-sonnet-5' && mode !== 'mealplan') {
+      payload.thinking = { type: 'disabled' };
+    }
 
     // Counted only here, once the request has passed every check and is
     // about to cost money — refused requests don't use up the day's ceiling.
@@ -329,7 +359,9 @@ REPLY LENGTH AND FORMAT:
       let review = null;
       try { review = JSON.parse(text.replace(/```json|```/g, '').trim()); } catch { review = null; }
       if (!review || typeof review !== 'object' || !review.headline || !review.focus) {
-        return cors(json({ error: 'bad_review', message: "Your review didn't come out right — try again, it won't count against this week." }, 502));
+        // `why` is a short code for diagnosis only: empty reply, cut off, or not valid JSON.
+        const why = !text ? 'empty' : data.stop_reason === 'max_tokens' ? 'cut_off' : 'not_json';
+        return cors(json({ error: 'bad_review', why, message: "Your review didn't come out right — try again, it won't count against this week." }, 502));
       }
       const fields = tier === 'pro'
         ? ['headline', 'week_on_week', 'went_well', 'to_work_on', 'focus', 'focus_why']
@@ -391,20 +423,39 @@ async function handleStripeWebhook(request, env) {
     const session = event.data.object;
     const email = (session.customer_details?.email || session.customer_email || '').toLowerCase();
     const customerId = session.customer;
-    if (email) await env.COACH_LIMITS.put('pro:' + email, 'true');
-    // Remember which email this Stripe customer ID belongs to, so a future
+    // The app also sends its own login email through the checkout as
+    // client_reference_id. If the client typed a different email at Stripe,
+    // this is the one the app actually knows them by — grant Pro to both.
+    const appEmail = decodeRef(session.client_reference_id);
+    const emails = [...new Set([email, appEmail].filter(Boolean))];
+    for (const e of emails) await env.COACH_LIMITS.put('pro:' + e, 'true');
+    // Remember which email(s) this Stripe customer ID belongs to, so a future
     // cancellation event (which only carries the ID, not the email) can find
     // the right person to revoke — without needing a second Stripe API call.
-    if (customerId && email) await env.COACH_LIMITS.put('customerEmail:' + customerId, email);
+    if (customerId && emails.length) await env.COACH_LIMITS.put('customerEmail:' + customerId, emails.join(','));
   }
 
   if (event.type === 'customer.subscription.deleted') {
     const customerId = event.data.object.customer;
-    const email = customerId ? await env.COACH_LIMITS.get('customerEmail:' + customerId) : null;
-    if (email) await env.COACH_LIMITS.delete('pro:' + email);
+    const stored = customerId ? await env.COACH_LIMITS.get('customerEmail:' + customerId) : null;
+    // One email for older records, or two comma-separated (Stripe + app email).
+    for (const e of String(stored || '').split(',').filter(Boolean)) {
+      await env.COACH_LIMITS.delete('pro:' + e);
+    }
   }
 
   return new Response('ok', { status: 200 });
+}
+
+// Turns the app's client_reference_id back into an email. Returns '' for
+// anything missing or that doesn't decode to a plausible email.
+function decodeRef(ref) {
+  if (!ref || typeof ref !== 'string' || ref.length > 200) return '';
+  try {
+    const b64 = ref.replace(/-/g, '+').replace(/_/g, '/');
+    const email = atob(b64 + '='.repeat((4 - b64.length % 4) % 4)).toLowerCase().trim();
+    return email.length <= 254 && EMAIL_RE.test(email) ? email : '';
+  } catch { return ''; }
 }
 
 // Verifies the webhook genuinely came from Stripe, not someone faking a
