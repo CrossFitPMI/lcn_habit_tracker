@@ -347,7 +347,7 @@
         onkeydown="if(event.key==='Enter')doLogin()">
       <div id="login-error" style="color:var(--red);font-size:12.5px;margin-top:8px;min-height:16px"></div>
       <button class="login-btn" onclick="doLogin()">Let's Go →</button>
-      <p style="font-size:11px;color:var(--muted);margin-top:16px;margin-bottom:0;line-height:1.5">Your name, email and habit logs are stored securely and used only for your coaching — nothing is shared or sold. Your logging streak (just the number of days, nothing else) appears on the gym's streak board; you can hide it any time in the Streaks tab. Ask your coach any time to see or delete your data.</p>
+      <p style="font-size:11px;color:var(--muted);margin-top:16px;margin-bottom:0;line-height:1.5">Your details are used only for your coaching and are never sold. Before you start you’ll be asked to agree to our <a href="#" onclick="if(window.lcnPrivacy)lcnPrivacy.open();return false;" style="color:var(--green-dark);font-weight:700">Privacy notice</a>.</p>
     </div>
   </div>
 
@@ -4198,9 +4198,10 @@ async function endAISession(){
         '<div class="v2-row"><span>My badges &amp; streaks</span><button type="button" class="v2-link" data-go="streaks">View</button></div>'+
         '<div class="v2-row"><span>Weekly check-in</span><button type="button" class="v2-link" id="v2-checkin">Open</button></div>'+
         '<div class="v2-row"><span>App tour</span><button type="button" class="v2-link" id="v2-tour">Replay</button></div>'+
+        '<div class="v2-row"><span>Privacy notice</span><button type="button" class="v2-link" onclick="if(window.lcnPrivacy)lcnPrivacy.open()">View</button></div>'+
         (standalone?'':'<div class="v2-row"><span>Install the app on your phone</span><button type="button" class="v2-link" onclick="triggerInstall()">Install</button></div>')+
       '</div>'+
-      '<p class="v2-note" style="text-align:center">Your details are used only for your coaching — nothing is shared or sold. Ask your coach any time to see or delete your data.</p>';
+      '<p class="v2-note" style="text-align:center">Your details are used only for your coaching and are never sold. To see or delete your data, email leancompnutrition@gmail.com.</p>';
 
     el('v2-redo').onclick=el('v2-redo2').onclick=function(){ closeProfile(); if(window.openOnboarding) openOnboarding(); };
     el('v2-favs').onclick=function(){ closeProfile(); show('plan'); if(window.lcnRecipes) lcnRecipes.showFavs(); };
@@ -4969,7 +4970,7 @@ async function endAISession(){
   function busy(){
     var p=lcnProfile.get();
     if(!p || (!p.completedAt && !p.skippedAt)) return true;   // first-run setup still to come
-    return ['onb','v2-profile','rc-page','ch-page','au-sheet'].some(function(id){ var e=el(id); return e && !e.hidden; });
+    return ['onb','v2-profile','rc-page','ch-page','au-sheet','pv-gate','pv-page'].some(function(id){ var e=el(id); return e && !e.hidden; });
   }
   var waitTimer=null, tries=0;
   function maybe(){
@@ -5165,5 +5166,155 @@ async function endAISession(){
 })();
 </script>
 <!-- ══════════════ END SIGN-IN ══════════════ -->
+<!-- ══════════════ PRIVACY NOTICE + CONSENT (additive block) ══════════════
+     - The Privacy notice page (opened from the login screen, the consent
+       box and Profile).
+     - A consent box every client must tick once before using the app. The
+       date they agreed is kept on the device straight away and copied into
+       their profile (so it reaches the sheet) as soon as a profile exists.
+     If the notice wording changes in a way clients should re-agree to,
+     change CONSENT_VERSION and everyone is asked again. -->
+<style>
+  .pv-gate{position:fixed;inset:0;z-index:2100;background:rgba(20,35,12,.6);display:flex;align-items:center;justify-content:center;padding:18px}
+  .pv-gate[hidden]{display:none}
+  .pv-card{width:100%;max-width:400px;max-height:100%;overflow-y:auto;background:var(--card,#fff);border-radius:20px;padding:24px 22px 18px;box-shadow:0 18px 50px rgba(0,0,0,.25)}
+  .pv-card .h{font-family:"Nunito",sans-serif;font-weight:900;font-size:21px;color:var(--green-dark);margin:0 0 8px;text-align:center}
+  .pv-card p{font-size:14.5px;line-height:1.5;margin:0 0 12px}
+  .pv-tick{display:flex;gap:12px;align-items:flex-start;background:#f8fdf4;border:2px solid var(--border);border-radius:14px;padding:14px;cursor:pointer;font-size:14px;line-height:1.5}
+  .pv-tick input{width:22px;height:22px;flex-shrink:0;margin-top:1px;accent-color:var(--green)}
+  .pv-btn{width:100%;border:none;border-radius:12px;background:var(--green);color:#fff;font-family:"Nunito",sans-serif;font-weight:800;font-size:17px;padding:13px;cursor:pointer;margin-top:14px}
+  .pv-btn[disabled]{opacity:.5;cursor:default}
+  .pv-link{background:none;border:none;color:var(--green-dark);font:inherit;font-weight:700;text-decoration:underline;padding:0;cursor:pointer}
+  .pv-no{display:block;margin:10px auto 0;background:none;border:none;color:var(--muted);font-family:"DM Sans",sans-serif;font-size:13.5px;font-weight:600;padding:8px;cursor:pointer;text-decoration:underline}
+  .pv-page{position:fixed;inset:0;z-index:2200;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .pv-page[hidden]{display:none}
+  .pv-top{position:sticky;top:0;background:var(--white,#fff);border-bottom:1px solid var(--border);padding:calc(10px + env(safe-area-inset-top)) 16px 10px;display:flex;align-items:center;gap:10px;z-index:1}
+  .pv-top button{border:none;background:var(--green-light);color:var(--green-dark);width:38px;height:38px;border-radius:50%;font-size:22px;line-height:1;cursor:pointer;flex-shrink:0}
+  .pv-top b{font-family:"Nunito",sans-serif;font-weight:900;font-size:17px;color:var(--green-dark)}
+  .pv-body{max-width:640px;margin:0 auto;padding:18px 18px calc(40px + env(safe-area-inset-bottom))}
+  .pv-body h2{font-family:"Nunito",sans-serif;font-weight:900;font-size:17px;color:var(--green-dark);margin:22px 0 6px}
+  .pv-body p,.pv-body li{font-size:15px;line-height:1.6}
+  .pv-body p{margin:8px 0}
+  .pv-body ul{margin:8px 0;padding-left:20px}
+  .pv-body li{margin:6px 0}
+  .pv-body table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14.5px}
+  .pv-body td{border-top:1px solid var(--border);padding:9px 6px;vertical-align:top;line-height:1.45}
+  .pv-body td:first-child{font-weight:800;white-space:nowrap;padding-right:14px}
+  .pv-body .upd{font-size:12.5px;color:var(--muted)}
+</style>
+<div class="pv-gate" id="pv-gate" hidden role="dialog" aria-modal="true" aria-labelledby="pv-gate-h"><div class="pv-card">
+  <div class="h" id="pv-gate-h">Before you start</div>
+  <p>To coach you, this app stores what you enter and uses an AI coach. Please read and agree to how we handle your information.</p>
+  <label class="pv-tick"><input type="checkbox" id="pv-check">
+    <span>I agree to Lean Comp Nutrition storing the information I enter, including health information such as my weight, body measurements and allergies, and sharing it with its AI provider to coach me. I have read the <button type="button" class="pv-link" id="pv-read">Privacy notice</button>. I am 18 or over.</span></label>
+  <button type="button" class="pv-btn" id="pv-agree" disabled>Agree and continue</button>
+  <button type="button" class="pv-no" id="pv-decline">I don’t agree</button>
+</div></div>
+<div class="pv-page" id="pv-page" hidden role="dialog" aria-modal="true" aria-label="Privacy notice">
+  <div class="pv-top"><button type="button" id="pv-close" aria-label="Back">‹</button><b>Privacy notice</b></div>
+  <div class="pv-body">
+    <p class="upd">Last updated 16 November 2026</p>
+    <h2 style="margin-top:6px">Your privacy</h2>
+    <p>This app is run by Lean Comp Nutrition, Limerick, Ireland. We are responsible for your data. For any question or request about it, email <a href="mailto:leancompnutrition@gmail.com">leancompnutrition@gmail.com</a>.</p>
+    <h2>What we collect</h2>
+    <ul>
+      <li><b>Your details:</b> your first name and email address.</li>
+      <li><b>Your daily habits:</b> water, protein, alcohol, exercise, sleep, steps, fruit and veg, and any notes you add.</li>
+      <li><b>Your setup answers and profile:</b> your goal, how you rate your habits, your sex, age, height and weight (used to work out calorie and protein targets), your work pattern, dietary preferences and allergies, and anything you write about why your goal matters to you.</li>
+      <li><b>Body measurements, if you add them:</b> weight, muscle mass, body fat and InBody score.</li>
+      <li><b>Weekly check-ins:</b> your ratings for energy, hunger, sleep and stress, your wins and struggles, and your weekly review.</li>
+      <li><b>Coach conversations:</b> what you type to the AI coach, and a short summary of each session.</li>
+      <li><b>Payment status, if you go Pro:</b> whether your subscription is active. Card details are handled by Stripe; we never see them.</li>
+    </ul>
+    <p>Some of this is health information. We only collect it with your consent.</p>
+    <h2>What we use it for</h2>
+    <ul>
+      <li>To run the app: saving your logs, showing your progress, and working out your targets.</li>
+      <li>To coach you: the AI coach and weekly review read your logs, check-ins and profile so the advice fits you.</li>
+      <li>So your human coach at Lean Comp Nutrition can see how you are getting on and support you.</li>
+      <li>To email you: sign-in codes, and a weekly summary you can unsubscribe from.</li>
+    </ul>
+    <p>We do not sell your data and we do not use it for advertising.</p>
+    <h2>The AI coach</h2>
+    <p>The coach is an AI. When you use it, the relevant parts of your data are sent to our AI provider, Anthropic, to write the reply. It gives general nutrition and habit guidance. It is not medical advice and does not replace your doctor.</p>
+    <h2>Who else handles your data</h2>
+    <p>We use these companies to run the app. They process your data on our behalf.</p>
+    <table>
+      <tr><td>Google</td><td>Stores your data and sends our emails</td></tr>
+      <tr><td>Cloudflare</td><td>Runs the service that connects the app to the AI coach</td></tr>
+      <tr><td>Anthropic</td><td>Provides the AI that writes coach replies and weekly reviews</td></tr>
+      <tr><td>Stripe</td><td>Takes Pro payments</td></tr>
+      <tr><td>GitHub</td><td>Hosts the app itself</td></tr>
+    </table>
+    <p>Some of these companies are based in the United States, so your data may be processed outside the European Economic Area.</p>
+    <h2>The streak board</h2>
+    <p>Your first name, the first letter of your surname, and your logging streak appear on the streak board that other clients can see. Nothing else is shown. You can hide yourself from the board at any time in the app.</p>
+    <h2>How long we keep it</h2>
+    <p>We keep your data while you use the app and for 12 months after your last activity. After that we delete it. You can ask us to delete it sooner at any time.</p>
+    <h2>Your rights</h2>
+    <p>You can ask us for a copy of your data, ask us to correct it, ask us to delete it, or withdraw your consent. To do any of these, email <a href="mailto:leancompnutrition@gmail.com">leancompnutrition@gmail.com</a>. If you withdraw consent we will stop using your data, and you will no longer be able to use the app.</p>
+    <p>If you are unhappy with how we have handled your data, you can complain to the Data Protection Commission (dataprotection.ie).</p>
+    <h2>Age</h2>
+    <p>The app is for adults aged 18 and over.</p>
+    <h2>On your phone</h2>
+    <p>The app keeps a copy of your recent data on your own device so it loads quickly and works offline. It does not use advertising or tracking cookies.</p>
+  </div>
+</div>
+<script>
+(function(){
+  "use strict";
+  var el=function(id){return document.getElementById(id);};
+  var CONSENT_VERSION='2026-11-16';     // change to ask everyone to agree again
+  var gate=el('pv-gate'), page=el('pv-page');
+  function key(){ return 'lcn_consent_'+currentEmail; }
+  function local(){ try{ return JSON.parse(localStorage.getItem(key())||'null'); }catch(e){ return null; } }
+  function profile(){ return (window.lcnProfile&&lcnProfile.get)?lcnProfile.get():null; }
+  function agreed(){
+    var l=local(); if(l&&l.v===CONSENT_VERSION) return l;
+    var p=profile(); if(p&&p.consent&&p.consent.v===CONSENT_VERSION) return p.consent;   // agreed on another device
+    return null;
+  }
+  /* Copy the consent date into the profile so it reaches the sheet. Only
+     when a profile already exists on this device: saving a blank one here
+     could overwrite the client's real profile before it has loaded. */
+  function sync(){
+    if(!currentEmail) return;
+    var l=local(), p=profile();
+    if(!l||!p||!(window.lcnProfile&&lcnProfile.save)) return;
+    if(p.consent&&p.consent.v===l.v) return;
+    p.consent={at:l.at,v:l.v}; lcnProfile.save(p);
+  }
+  function openPage(){ page.hidden=false; page.scrollTop=0; }
+  function closePage(){ page.hidden=true; }
+  el('pv-close').onclick=closePage;
+  el('pv-read').onclick=function(e){ e.preventDefault(); openPage(); };
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&!page.hidden) closePage(); });
+  window.lcnPrivacy={open:openPage};
+
+  var check=el('pv-check'), agree=el('pv-agree');
+  check.onchange=function(){ agree.disabled=!check.checked; };
+  agree.onclick=function(){
+    if(!check.checked) return;
+    try{ localStorage.setItem(key(),JSON.stringify({at:new Date().toISOString(),v:CONSENT_VERSION})); }catch(e){}
+    gate.hidden=true; sync();
+  };
+  var armed=false;
+  el('pv-decline').onclick=function(){
+    if(!armed){ armed=true; this.textContent='Tap again to leave. You can’t use the app without agreeing.'; this.style.color='var(--red)'; return; }
+    try{ localStorage.removeItem('lcn_user'); localStorage.removeItem('lcn_email'); }catch(e){}
+    location.reload();
+  };
+
+  function maybeAsk(){
+    if(!currentEmail) return;
+    if(agreed()){ sync(); return; }
+    check.checked=false; agree.disabled=true; gate.hidden=false;
+  }
+  var _show=showApp;
+  showApp=function(){ _show.apply(this,arguments); setTimeout(maybeAsk,900); setTimeout(sync,8000); };
+  if(currentEmail && el('app-section') && el('app-section').style.display==='block'){ setTimeout(maybeAsk,900); setTimeout(sync,8000); }
+})();
+</script>
+<!-- ══════════════ END PRIVACY ══════════════ -->
 </body>
 </html>
