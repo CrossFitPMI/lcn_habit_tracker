@@ -9,6 +9,7 @@ These files are **copies for version history**. They are not deployed from here.
 | `apps-script/Code.gs` | Apps Script `lean comp tracker` | paste into the editor, then Deploy → Manage deployments → New version |
 | `apps-script/ClientApi.gs` | same project | same |
 | `apps-script/WeeklyEmail.gs` | same project | same |
+| `apps-script/Auth.gs` | same project (sign-in by emailed code) | same; run `setupAuth` once and copy the secret into the Worker as `AUTH_SECRET` |
 | `worker/index.js` | Cloudflare Worker `lean-comp-coach` | paste into the Cloudflare dashboard, Deploy |
 
 **The trap:** editing a file in this folder changes nothing in production. Edit
