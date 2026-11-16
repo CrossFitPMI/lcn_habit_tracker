@@ -259,6 +259,19 @@ REPLY LENGTH AND FORMAT:
     };
     if (systemBlocks) payload.system = systemBlocks;
 
+    /* Claude Sonnet 5 "thinks" before it answers unless told not to, and that
+       thinking is paid for out of max_tokens. With the small limits used
+       here (500-1000) a busier request could spend the whole allowance
+       thinking and return no text at all — which is how Pro weekly reviews
+       came back as "didn't come out right" every time for some clients.
+       These are short, structured replies that don't need it, so it is
+       switched off. Meal plans keep it (they have 16,000 tokens of room).
+       NOTE: only Sonnet 5 accepts "disabled". If MODELS is ever changed to
+       a newer model, check its docs before keeping this line. */
+    if (payload.model === 'claude-sonnet-5' && mode !== 'mealplan') {
+      payload.thinking = { type: 'disabled' };
+    }
+
     // Counted only here, once the request has passed every check and is
     // about to cost money — refused requests don't use up the day's ceiling.
     await env.COACH_LIMITS.put(callsKey, String(callsToday + 1), { expirationTtl: 7776000 });
@@ -346,7 +359,9 @@ REPLY LENGTH AND FORMAT:
       let review = null;
       try { review = JSON.parse(text.replace(/```json|```/g, '').trim()); } catch { review = null; }
       if (!review || typeof review !== 'object' || !review.headline || !review.focus) {
-        return cors(json({ error: 'bad_review', message: "Your review didn't come out right — try again, it won't count against this week." }, 502));
+        // `why` is a short code for diagnosis only: empty reply, cut off, or not valid JSON.
+        const why = !text ? 'empty' : data.stop_reason === 'max_tokens' ? 'cut_off' : 'not_json';
+        return cors(json({ error: 'bad_review', why, message: "Your review didn't come out right — try again, it won't count against this week." }, 502));
       }
       const fields = tier === 'pro'
         ? ['headline', 'week_on_week', 'went_well', 'to_work_on', 'focus', 'focus_why']
