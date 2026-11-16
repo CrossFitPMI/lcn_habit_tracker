@@ -570,6 +570,67 @@ const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyyNOABBFi7Q3IzqUYQ_
    key, enforces the daily cap, routes chat to Haiku and summaries to Sonnet). */
 const WORKER_URL = 'https://lean-comp-coach.michealfitzpatrick.workers.dev';
 
+/* ── SIGN-IN TOKEN ────────────────────────────────────────────────────────
+   After a client types the 6-digit code emailed to them, the server hands
+   back a signed "token" proving this device belongs to that email (see the
+   SIGN-IN block near the end of this file, and Auth.gs in Apps Script).
+
+   AUTH_REQUIRED is the app's half of the two-stage rollout:
+     false (stage one) — clients are asked to confirm their email but can tap
+                         "Not now"; everything still works without a token.
+     true  (stage two) — no skipping. Switch this on at the same time as the
+                         servers start refusing requests without a token. */
+const AUTH_REQUIRED = false;
+const authMem = {};   // fallback when localStorage is unavailable (private browsing)
+function authTokenFor(email){
+  if(!email) return '';
+  let t=''; try{ t=localStorage.getItem('lcn_token_'+email)||''; }catch(e){}
+  t=t||authMem[email]||'';
+  if(!t) return '';
+  try{   // drop it locally once it has expired, so the app asks again
+    const p=t.split('.')[0].replace(/-/g,'+').replace(/_/g,'/');
+    const o=JSON.parse(atob(p+'==='.slice((p.length+3)%4)));
+    if(!(Number(o.x)>Date.now())) return '';
+  }catch(e){ return ''; }
+  return t;
+}
+function authSaveToken(email,token){ authMem[email]=token; try{ localStorage.setItem('lcn_token_'+email,token); }catch(e){} }
+function authClearToken(email){ delete authMem[email]; try{ localStorage.removeItem('lcn_token_'+email); }catch(e){} }
+
+/* Every request to our two servers carries the token, added here in one place
+   so none of the ~40 call sites has to remember. Requests to anywhere else
+   are passed through untouched. If a server answers "auth_required" (stage
+   two, token missing or expired) the sign-in screen is opened. */
+(function(){
+  const realFetch=window.fetch.bind(window);
+  window.fetch=function(input,init){
+    let ours=false;
+    try{
+      const url=typeof input==='string'?input:'';
+      ours=!!url && (url.indexOf(SCRIPT_URL)===0 || url.indexOf(WORKER_URL)===0);
+      const tok=ours?authTokenFor(typeof currentEmail==='string'?currentEmail:''):'';
+      if(tok){
+        const method=((init&&init.method)||'GET').toUpperCase();
+        if(method==='GET'){
+          if(url.indexOf('token=')<0 && !/[?&]action=(requestCode|verifyCode)\b/.test(url))
+            input=url+(url.indexOf('?')<0?'?':'&')+'token='+encodeURIComponent(tok);
+        }else if(init && typeof init.body==='string'){
+          const b=JSON.parse(init.body);
+          if(b && typeof b==='object' && !Array.isArray(b) && !b.token){ b.token=tok; init=Object.assign({},init,{body:JSON.stringify(b)}); }
+        }
+      }
+    }catch(e){ /* never let this get in the way of the request itself */ }
+    const p=realFetch(input,init);
+    if(ours) p.then(function(res){
+      if(!res || res.type==='opaque') return;
+      res.clone().text().then(function(t){
+        if(t.length<300 && t.indexOf('"auth_required"')>-1 && window.lcnAuth) window.lcnAuth.need();
+      }).catch(function(){});
+    }).catch(function(){});
+    return p;
+  };
+})();
+
 /* Stripe Payment Link for the Pro upgrade (Stripe dashboard → Payment Links).
    Leave blank to hide the upgrade button entirely until this is set up. */
 const STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/9B6dRa7yL2Dcd100i02Fa00';
@@ -774,6 +835,15 @@ function doLogin() {
     return;
   }
   errEl.textContent = '';
+  // Confirm the email belongs to them (emailed code) before going in. If
+  // this device has already confirmed that email, it goes straight through.
+  if(window.lcnAuth && !authTokenFor(email)){
+    window.lcnAuth.confirm(email,{fresh:true}).then(function(ok){ if(ok) finishLogin(name,email); });
+    return;
+  }
+  finishLogin(name,email);
+}
+function finishLogin(name,email){
   currentUser = name;
   currentEmail = email;
   // Safari in Private Browsing throws on setItem; login must still work.
@@ -4896,7 +4966,7 @@ async function endAISession(){
   function busy(){
     var p=lcnProfile.get();
     if(!p || (!p.completedAt && !p.skippedAt)) return true;   // first-run setup still to come
-    return ['onb','v2-profile','rc-page','ch-page'].some(function(id){ var e=el(id); return e && !e.hidden; });
+    return ['onb','v2-profile','rc-page','ch-page','au-sheet'].some(function(id){ var e=el(id); return e && !e.hidden; });
   }
   var waitTimer=null, tries=0;
   function maybe(){
@@ -4915,5 +4985,182 @@ async function endAISession(){
 })();
 </script>
 <!-- ══════════════ END TOUR v1 ══════════════ -->
+<!-- ══════════════ SIGN-IN BY EMAILED CODE (additive block) ══════════════
+     Proves an email belongs to the person using it. New logins get a code
+     straight away; clients already logged in on this device are asked once
+     (and, during stage one, can put it off). The token that comes back is
+     stored per email and attached to every request by the fetch wrapper at
+     the top of the main script. Server side: Auth.gs + the Worker. -->
+<style>
+  .au-sheet{position:fixed;inset:0;z-index:500;background:rgba(20,35,12,.55);display:flex;align-items:center;justify-content:center;padding:18px}
+  .au-sheet[hidden]{display:none}
+  .au-card{width:100%;max-width:380px;background:var(--card,#fff);border-radius:20px;padding:24px 22px 18px;box-shadow:0 18px 50px rgba(0,0,0,.25);text-align:center}
+  .au-ico{font-size:34px;line-height:1}
+  .au-h{font-family:"Nunito",sans-serif;font-weight:900;font-size:21px;color:var(--green-dark);margin:8px 0 6px}
+  .au-p{font-size:14.5px;line-height:1.5;color:var(--text);margin:0 0 14px}
+  .au-p b{word-break:break-all}
+  .au-code{width:100%;font-family:"Nunito",sans-serif;font-size:30px;font-weight:900;letter-spacing:10px;text-align:center;padding:12px 8px 12px 18px;border:2px solid var(--border);border-radius:12px;background:#f8fdf4;color:var(--green-dark);outline:none}
+  .au-code:focus{border-color:var(--green)}
+  .au-err{min-height:18px;font-size:13px;color:var(--red);margin:8px 0 4px}
+  .au-btn{width:100%;border:none;border-radius:12px;background:var(--green);color:#fff;font-family:"Nunito",sans-serif;font-weight:800;font-size:17px;padding:13px;cursor:pointer}
+  .au-btn[disabled]{opacity:.55;cursor:default}
+  .au-links{display:flex;flex-direction:column;gap:2px;margin-top:10px}
+  .au-link{background:none;border:none;color:var(--muted);font-family:"DM Sans",sans-serif;font-size:13.5px;font-weight:600;padding:8px;cursor:pointer;text-decoration:underline}
+  .au-link[disabled]{text-decoration:none;opacity:.7;cursor:default}
+</style>
+<div class="au-sheet" id="au-sheet" hidden role="dialog" aria-modal="true" aria-labelledby="au-h"><div class="au-card" id="au-card"></div></div>
+<script>
+(function(){
+  "use strict";
+  var el=function(id){return document.getElementById(id);};
+  var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});};
+  var sheet=el('au-sheet'), card=el('au-card');
+  var cur=null;          // {email, fresh, resolve}
+  var cooldown=null;
+
+  function ymd(){ var d=new Date(); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); }
+  function skippedToday(email){ try{ return localStorage.getItem('lcn_auth_skip_'+email)===ymd(); }catch(e){ return false; } }
+  function markSkipped(email){ try{ localStorage.setItem('lcn_auth_skip_'+email,ymd()); }catch(e){} }
+
+  function open(){ sheet.hidden=false; document.body.style.overflow='hidden'; }
+  function close(result){
+    sheet.hidden=true; document.body.style.overflow=''; clearInterval(cooldown);
+    var c=cur; cur=null; if(c&&c.resolve) c.resolve(result);
+  }
+  function api(q){
+    return fetchT(SCRIPT_URL+'?'+q,{},20000).then(function(r){ return r.json(); });
+  }
+
+  /* Screen 1 (clients already logged in on this device): explain, then send. */
+  function intro(){
+    card.innerHTML='<div class="au-ico">🔒</div><div class="au-h" id="au-h">One quick security step</div>'+
+      '<p class="au-p">To keep your data private, we now confirm your email with a 6-digit code. It takes a few seconds and you only do it once on this phone.</p>'+
+      '<p class="au-p">We’ll send the code to<br><b>'+esc(cur.email)+'</b></p>'+
+      '<button type="button" class="au-btn" id="au-send">Email me my code</button>'+
+      '<div class="au-links">'+(AUTH_REQUIRED?'':'<button type="button" class="au-link" id="au-skip">Not now</button>')+
+      '<button type="button" class="au-link" id="au-other">That’s not my email</button></div>';
+    el('au-send').onclick=function(){ send(false); };
+    if(el('au-skip')) el('au-skip').onclick=function(){ markSkipped(cur.email); close(true); };
+    el('au-other').onclick=useOther;
+  }
+
+  /* Ask the server to email a code, then show the box to type it into. */
+  function send(isResend){
+    var email=cur.email;
+    card.innerHTML='<div class="au-ico">✉️</div><div class="au-h" id="au-h">Sending your code…</div><p class="au-p">One moment.</p>';
+    api('action=requestCode&email='+encodeURIComponent(email)).then(function(d){
+      if(!cur||cur.email!==email) return;
+      if(d&&d.ok){ entry(isResend?'A new code is on its way.':''); return; }
+      // The servers haven't been updated yet (or aren't set up): during
+      // stage one, don't hold anyone up over it.
+      if(!AUTH_REQUIRED && (!d || d.error==='not_configured' || d.error==='Unknown action')){ close(true); return; }
+      problem((d&&d.message)|| (d&&d.error==='bad_email'?'That email address doesn’t look right.':'We couldn’t send the code just now.'));
+    }).catch(function(){
+      if(!cur||cur.email!==email) return;
+      if(!AUTH_REQUIRED && cur.fresh){ close(true); return; }     // offline at first login: let them in for now
+      problem('We couldn’t reach the server. Check your connection and try again.');
+    });
+  }
+  function problem(msg){
+    card.innerHTML='<div class="au-ico">⚠️</div><div class="au-h" id="au-h">That didn’t work</div><p class="au-p">'+esc(msg)+'</p>'+
+      '<button type="button" class="au-btn" id="au-retry">Try again</button>'+
+      '<div class="au-links">'+(AUTH_REQUIRED?'':'<button type="button" class="au-link" id="au-skip">Not now</button>')+
+      '<button type="button" class="au-link" id="au-other">Use a different email</button></div>';
+    el('au-retry').onclick=function(){ send(false); };
+    if(el('au-skip')) el('au-skip').onclick=function(){ markSkipped(cur.email); close(true); };
+    el('au-other').onclick=useOther;
+  }
+
+  /* Screen 2: type the code. */
+  function entry(note){
+    card.innerHTML='<div class="au-ico">✉️</div><div class="au-h" id="au-h">Check your email</div>'+
+      '<p class="au-p">We sent a 6-digit code to<br><b>'+esc(cur.email)+'</b><br>It can take a minute. Check your spam folder too.</p>'+
+      '<input class="au-code" id="au-code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="7" placeholder="••••••" aria-label="6-digit code">'+
+      '<div class="au-err" id="au-err" role="alert">'+esc(note||'')+'</div>'+
+      '<button type="button" class="au-btn" id="au-go">Confirm</button>'+
+      '<div class="au-links"><button type="button" class="au-link" id="au-again" disabled>Send a new code (30)</button>'+
+      (AUTH_REQUIRED?'':'<button type="button" class="au-link" id="au-skip">Not now</button>')+
+      '<button type="button" class="au-link" id="au-other">Use a different email</button></div>';
+    if(note) el('au-err').style.color='var(--green-dark)';
+    var inp=el('au-code');
+    inp.oninput=function(){ var v=inp.value.replace(/\D/g,'').slice(0,6); if(v!==inp.value) inp.value=v; el('au-err').textContent=''; if(v.length===6) check(); };
+    inp.onkeydown=function(e){ if(e.key==='Enter') check(); };
+    el('au-go').onclick=check;
+    if(el('au-skip')) el('au-skip').onclick=function(){ markSkipped(cur.email); close(true); };
+    el('au-other').onclick=useOther;
+    var left=30, again=el('au-again');
+    clearInterval(cooldown);
+    cooldown=setInterval(function(){
+      left--; if(!el('au-again')){ clearInterval(cooldown); return; }
+      if(left<=0){ clearInterval(cooldown); again.disabled=false; again.textContent='Send a new code'; }
+      else again.textContent='Send a new code ('+left+')';
+    },1000);
+    again.onclick=function(){ if(!again.disabled) send(true); };
+    setTimeout(function(){ try{ inp.focus(); }catch(e){} },60);
+  }
+  var checking=false;
+  function check(){
+    if(checking||!cur) return;
+    var inp=el('au-code'), err=el('au-err'), email=cur.email;
+    var code=(inp.value||'').replace(/\D/g,'');
+    err.style.color='';
+    if(code.length!==6){ err.textContent='Enter all 6 digits.'; return; }
+    checking=true; el('au-go').disabled=true; el('au-go').textContent='Checking…';
+    api('action=verifyCode&email='+encodeURIComponent(email)+'&code='+code).then(function(d){
+      checking=false;
+      if(!cur||cur.email!==email) return;
+      if(d&&d.ok&&d.token){ authSaveToken(email,d.token); close(true); return; }
+      if(el('au-go')){ el('au-go').disabled=false; el('au-go').textContent='Confirm'; }
+      err.textContent=(d&&d.message)||'That code isn’t right. Check it and try again.';
+      inp.value=''; try{ inp.focus(); }catch(e){}
+    }).catch(function(){
+      checking=false;
+      if(el('au-go')){ el('au-go').disabled=false; el('au-go').textContent='Confirm'; }
+      if(err) err.textContent='We couldn’t reach the server. Check your connection and try again.';
+    });
+  }
+
+  /* "That's not my email": back to the login screen with nothing saved. */
+  function useOther(){
+    var fresh=cur&&cur.fresh;
+    close(false);
+    if(fresh) return;                         // still on the login screen; just let them retype
+    try{ localStorage.removeItem('lcn_user'); localStorage.removeItem('lcn_email'); }catch(e){}
+    location.reload();
+  }
+
+  /* confirm(email,{fresh}) → Promise<boolean>: true = carry on (confirmed, or
+     put off during stage one); false = they backed out to change the email. */
+  function confirmEmail(email,opts){
+    opts=opts||{};
+    if(authTokenFor(email)) return Promise.resolve(true);
+    if(cur){ return new Promise(function(res){ var prev=cur.resolve; cur.resolve=function(v){ if(prev) prev(v); res(v); }; }); }
+    return new Promise(function(res){
+      cur={email:email,fresh:!!opts.fresh,resolve:res};
+      open();
+      if(opts.fresh) send(false); else intro();
+    });
+  }
+  /* A server said "sign in required": the saved token is no good any more. */
+  function need(){
+    if(!currentEmail||cur) return;
+    authClearToken(currentEmail);
+    confirmEmail(currentEmail,{}).then(function(ok){ if(ok && authTokenFor(currentEmail)) location.reload(); });
+  }
+  window.lcnAuth={confirm:confirmEmail,need:need};
+
+  /* Clients already logged in on this device from before sign-in existed:
+     ask once the app has settled. In stage one, at most once a day. */
+  function maybeAsk(){
+    if(!currentEmail||authTokenFor(currentEmail)||cur) return;
+    if(!AUTH_REQUIRED && skippedToday(currentEmail)) return;
+    confirmEmail(currentEmail,{});
+  }
+  var _show=showApp;
+  showApp=function(){ _show.apply(this,arguments); setTimeout(maybeAsk,1500); };
+  if(currentEmail && el('app-section') && el('app-section').style.display==='block') setTimeout(maybeAsk,1500);
+})();
+</script>
+<!-- ══════════════ END SIGN-IN ══════════════ -->
 </body>
 </html>
