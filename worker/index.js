@@ -93,6 +93,10 @@ export default {
     // POST-only guard below. No AI call, no cap consumption.
     if (request.method === 'GET' && url.searchParams.get('action') === 'tier') {
       const clientId = String(url.searchParams.get('clientId') || '').toLowerCase().trim();
+      // Stage two: only tell a signed-in client their own tier.
+      if (env.AUTH_ENFORCE === 'true' && (await tokenEmail(url.searchParams.get('token'), env)) !== clientId) {
+        return cors(json({ error: 'auth_required', tier: 'free' }, 401));
+      }
       const tier = clientId.length <= 254 && EMAIL_RE.test(clientId) && (await isPro(clientId, env)) ? 'pro' : 'free';
       return cors(json({ tier }));
     }
@@ -110,6 +114,16 @@ export default {
     }
     if (clientId.length > 254 || !EMAIL_RE.test(clientId)) {
       return cors(json({ error: 'bad_client' }, 400));
+    }
+    /* Sign-in. The app sends the token it was given after the client typed
+       their emailed code (see Auth.gs in Apps Script — same secret). In
+       stage one a request without a valid token is still served, so nobody
+       is locked out while the app update reaches everyone. Once the
+       AUTH_ENFORCE variable is set to "true" on this Worker, a valid token
+       for THIS email is required — which is what finally stops someone
+       using another client's email (and their Pro access). */
+    if (env.AUTH_ENFORCE === 'true' && (await tokenEmail(body.token, env)) !== clientId) {
+      return cors(json({ error: 'auth_required', message: 'Please sign in again to keep using the coach.' }, 401));
     }
     // Only the four modes the app uses. Previously an unknown mode skipped
     // every cap and still got an AI reply.
@@ -445,6 +459,31 @@ async function handleStripeWebhook(request, env) {
   }
 
   return new Response('ok', { status: 200 });
+}
+
+// Returns the email a sign-in token was issued to, or '' if the token is
+// missing, forged or expired. Tokens are made by Apps Script (Auth.gs):
+//   base64url(JSON {e: email, x: expiry ms}) + "." + base64url(HMAC-SHA256)
+async function tokenEmail(token, env) {
+  const secret = env.AUTH_SECRET;
+  if (!secret || typeof token !== 'string' || token.length > 1000) return '';
+  const dot = token.indexOf('.');
+  if (dot < 1) return '';
+  const payload = token.slice(0, dot), sig = token.slice(dot + 1);
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const mac = new Uint8Array(await crypto.subtle.sign('HMAC', key, enc.encode(payload)));
+  let bin = '';
+  for (const b of mac) bin += String.fromCharCode(b);
+  const expected = btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  if (!safeEqual(expected, sig)) return '';
+  try {
+    const b64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const raw = atob(b64 + '='.repeat((4 - b64.length % 4) % 4));
+    const obj = JSON.parse(new TextDecoder().decode(Uint8Array.from(raw, c => c.charCodeAt(0))));
+    if (!obj || !obj.e || !(Number(obj.x) > Date.now())) return '';
+    return String(obj.e).toLowerCase().trim();
+  } catch { return ''; }
 }
 
 // Turns the app's client_reference_id back into an email. Returns '' for

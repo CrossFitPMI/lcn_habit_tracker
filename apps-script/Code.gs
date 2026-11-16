@@ -8,6 +8,14 @@ function doGet(e) {
   const action = e.parameter.action;
   if (action === 'version')        return jsonOut_({ marker: 'SEPT15-DEDUPE' });
   if (action === 'unsubscribe')    return handleUnsubscribe(e);
+  /* Sign-in by emailed code (Auth.gs). Client routes are then checked: in
+     stage one a missing sign-in is still let through; in stage two it isn't. */
+  if (action === 'requestCode')    return requestCode(e);
+  if (action === 'verifyCode')     return verifyCode(e);
+  if (AUTH_GET_ACTIONS.indexOf(action) > -1) {
+    const blocked = authGate_(e.parameter.email, e.parameter.token);
+    if (blocked) return blocked;
+  }
   if (action === 'getMyLogs')      return getMyLogs(e);
   if (action === 'getLeaderboard') return getLeaderboard(e);
   if (action === 'getMyPrefs')     return getMyPrefs(e);
@@ -30,6 +38,10 @@ function doGet(e) {
 
 function doPost(e) {
   const data = JSON.parse(e.postData.contents);
+  if (AUTH_POST_ACTIONS.indexOf(data.action) > -1) {
+    const blocked = authGate_(data.clientEmail || data.email, data.token);
+    if (blocked) return blocked;
+  }
   if (data.action === 'addLog') return addLog(data);
   if (data.action === 'updateLog') return updateLog(data);
   if (data.action === 'setPref') return setPref(data);
